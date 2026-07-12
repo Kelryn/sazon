@@ -119,7 +119,7 @@ almacenamiento:
 # repositorio PUBLICO de binarios (usuario/repositorio) para activar el aviso de
 # nuevas versiones. Vacio = desactivado.
 actualizaciones:
-  repo: ""                     # p.ej. "tuusuario/sazon-releases"
+  repo: "Kelryn/sazon"         # repo publico de releases (comprueba nuevas versiones)
   comprobar_al_arrancar: true
 
 off:
