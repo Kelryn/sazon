@@ -1,7 +1,22 @@
 # Plan del proyecto (roadmap)
 
-Estado y hoja de ruta de menu-app. Refleja el **pivote a motor 100% determinista
-sin APIs de IA** (decisión del usuario: el espíritu de la app es el ahorro).
+Estado y hoja de ruta de **Sazón** (antes «menu-app» / «Menu + Alcampo»). Refleja el
+**pivote a motor 100% determinista sin APIs de IA** (decisión del usuario: el espíritu de
+la app es el ahorro).
+
+## Estado actual (2026-07-12)
+
+- **Versión publicada:** `0.2.0` — repo público **[github.com/Kelryn/sazon](https://github.com/Kelryn/sazon)**,
+  Release **v0.2.0** con `Sazon.exe`. El módulo de actualización se comprueba contra ese
+  repo (verificado: desde 0.1.0 detecta la 0.2.0; desde 0.2.0 dice «al día»).
+- **A partir de ahora, cada versión se sube a GitHub** (petición del usuario, para usar el
+  módulo de actualización): subir `version.py`, `git tag vX.Y.Z`, `push` → el workflow
+  compila `.exe` + instalador y publica la Release automáticamente.
+- **Corpus:** 4263 recetas (ES + IT + GR mediterráneas), ~48% batchcooking, 100% con
+  `cocina` española/mediterránea contada para el mínimo local. Pool utilizable ~869.
+- **Matching:** ~95,6% ponderado por uso (88% de ingredientes distintos).
+- **Fases 0–12 completadas.** Pendiente = estudios documentados aún sin implementar
+  (secciones B, D, I) y extensiones de la Fase 9 (micronutrientes, estacionalidad).
 
 ## Fases completadas
 
@@ -11,8 +26,8 @@ sin APIs de IA** (decisión del usuario: el espíritu de la app es el ahorro).
 | 1 | Ingesta del catálogo → CSV/SQLite (`AlcampoClient`) | ✅ |
 | 2 | Almacenamiento + normalización + clasificación `apto_receta` + enriquecimiento nutricional (`bop`) | ✅ |
 | 2b | **Nutrición estimada para frescos** (fruta/verdura/carne/pescado/huevo) desde USDA FoodData Central + BEDCA; columna `fuente_nutricion` ('bop'\|'estimada'); especias excluidas. Cobertura 86% | ✅ |
-| 3 | Ingesta de recetas (ES+EN, recipe-scrapers) + **crawler BFS** por recetas relacionadas para corpus de 1000+; medidas a métrico | ✅ 1103 recetas (**pendiente ampliar con cocina italiana y griega**, ver E) |
-| 4 | Matching ingrediente→producto **determinista** (índice invertido + cobertura de tokens con stem de plurales + glosario EN/LatAm + quita marca en mayúsculas + alternativas "X o Y") | ✅ **94% ponderado por uso** (85% de ingr. distintos; el resto son exóticos que Alcampo no vende — ver `ingredientes_sin_match.md`) |
+| 3 | Ingesta de recetas (ES+EN, recipe-scrapers) + **crawler BFS** por recetas relacionadas + **corpus mediterráneo ES/IT/GR** (`--mediterranea`, ver E); medidas a métrico | ✅ **4263 recetas** (ES + italianas + griegas) |
+| 4 | Matching ingrediente→producto **determinista** (índice invertido + cobertura de tokens con stem de plurales + glosario EN/LatAm + quita marca en mayúsculas + alternativas "X o Y" + frases/erratas y sinónimos LatAm añadidos por el usuario) | ✅ **~95,6% ponderado por uso** (88% de ingr. distintos; el resto son exóticos que Alcampo no vende — ver `ingredientes_sin_match.md`) |
 | 4b | **Alcohol de cocina** en el catálogo (vino, jerez, brandy, ron, cerveza, cava… `apto` como excepción) + **regla all-ingredients-match**: se excluye la receta si le falta cualquier ingrediente NO opcional en Alcampo | ✅ |
 | 5 | Motor de menú determinista: bandas de nutrientes (EFSA/OMS, **suelo de proteína**, fibra=suelo **blando** por falta de dato), coste+nutrición reales, palatabilidad bayesiana, **solver MILP (PuLP)**, ≥50% españolas, **rol de plato** (solo principales), **fracción de ingesta** (comida+cena≈65% del día) | ✅ **menú real factible** ~90 €/sem (2 pers) |
 
@@ -70,7 +85,7 @@ marcar días concretos como "batchcooking" y que ese día se cocine en tanda.
   **ensaladas** —se preparan la víspera con el aliño aparte— vs. plancha, frituras, crudos).
   Columna `recetas.es_batchcooking` +
   comando `menu-app-clasificar-batchcooking` (reporta el reparto). Estado actual del corpus:
-  **~34% batchcooking, ~99% de ellas españolas**.
+  **~48% batchcooking** (tras ampliar con el corpus mediterráneo), mayoría españolas.
 - **Objetivo de composición**: que **~50% del corpus** sea batchcooking, y **de esas ≥50%
   españolas** (esto último ya se cumple con holgura). El resto del corpus son mayormente
   postres/ensaladas/frituras que *no* son batchcooking; para subir la cuota a 50% hay que
@@ -133,7 +148,12 @@ de compraonline.alcampo.es sin intervención manual.
   capturar el endpoint del carrito (Vía 1) para decidir cuál es más fiable. **Requiere
   sesión iniciada del usuario y su visto bueno explícito antes de tocar el carrito.**
 
-### E) Ampliar el corpus con cocina italiana y griega  *(NUEVO — petición usuario)*
+### E) Ampliar el corpus con cocina italiana y griega  ✅ *(petición usuario — HECHO)*
+**Realizado (2026-07-12):** ingeridas recetas mediterráneas ES/IT/GR con el flag
+`menu-app-ingestar-recetas --mediterranea` (+ `--paginas-categoria`), sembrando categorías
+de cuchara y búsquedas mediterráneas (risotto, carbonara, moussaka, tzatziki, souvlaki…).
+Corpus 1103 → **4263 recetas**; pool utilizable ~166 → **~869**; matching ~95,6% ponderado.
+
 Motivo: los ingredientes de la cocina española, **italiana y griega** están casi todos en
 Alcampo (pasta, arroz, aceite de oliva, tomate, queso feta, aceitunas, legumbres, pescado,
 **vino de cocina**…). Ampliar el corpus a estas tres cocinas mediterráneas hace que la
@@ -145,12 +165,12 @@ exóticos que no se venden.
   mínimo de cocina local (contar ES/IT/GR como "mediterránea aceptable").
 - **Relación con el matching**: cuanto más mediterráneo el corpus, más alto sube la cobertura
   real y menos recetas caen por la regla all-match. Es la vía natural para subir el pool
-  utilizable (hoy 166 recetas) sin bajar la exigencia.
+  utilizable (166 → ~869 tras la ingesta mediterránea) sin bajar la exigencia.
 - **all-ingredients-match (ya implementado)**: `exigir_todos_ingredientes: true` — una receta
   solo entra si TODOS sus ingredientes no opcionales tienen producto en Alcampo. Los
   opcionales se detectan por texto ("opcional", "al gusto", "para decorar"…).
 
-### I) Estudio: racionalizar ingredientes entre recetas (reducir desperdicio)  *(NUEVO — petición usuario)*
+### I) Estudio: racionalizar ingredientes entre recetas (reducir desperdicio)  *(petición usuario — ESTUDIO HECHO, implementación pendiente)*
 Elegir las recetas del menú de forma que **compartan ingredientes**, para aprovechar el
 formato comprado (si el producto es 1 kg de cebolla y una receta usa 250 g, que el resto de
 recetas usen esa misma cebolla) → menos sobras, menos productos distintos y menos gasto.
@@ -179,7 +199,7 @@ recetas usen esa misma cebolla) → menos sobras, menos productos distintos y me
 | 8 | **Empaquetado ✅**: PyInstaller onefile → `dist/MenuAlcampo.exe` (57 MB, incluye catálogo), lanzador que siembra datos en `%LOCALAPPDATA%\MenuAlcampo` y abre el navegador; instalador Inno Setup (`installer.iss`); ver `EMPAQUETADO.md` |
 | 9 | Config avanzada y pulido: **equilibrio por grupos de alimentos AESAN ✅**, **despensa ✅**, **macros POR COMIDA ✅** (energía+proteína repartidas entre comida/cena por su % de energía FEN/AESAN + proteína pareja, Mamerow 2014; `escalar_bandas`, bandas por franja en el solver, `raciones_comida/cena`). Pendiente: micronutrientes (BEDCA/OFF), estacionalidad |
 | 10 | **Identidad de marca ✅**: nombre **Sazón**, paleta mediterránea + design tokens (CSS vars, `web/marca.py`), logo e icono SVG, favicon, `.ico` del `.exe` (`assets/icono.ico`, `generar_icono.py`), rediseño de la UI con tokens. `dist/Sazon.exe`. |
-| 11 | **Módulo de actualizaciones ✅** (NUEVO — petición usuario): `actualizaciones.py` (consulta GitHub Releases API, compara `version.py`), **banner** de nueva versión + sección en Configuración (repo + "Buscar actualizaciones"), workflow `.github/workflows/release.yml` (build `.exe` + Inno al pushear tag `v*`). Ver G. Falta: rellenar `actualizaciones.repo` con el repo real. |
+| 11 | **Módulo de actualizaciones ✅** (NUEVO — petición usuario): `actualizaciones.py` (consulta GitHub Releases API, compara `version.py`), **banner** de nueva versión + sección en Configuración (repo + "Buscar actualizaciones"), workflow `.github/workflows/release.yml` (build `.exe` + Inno al pushear tag `v*`). **Publicado y verificado** contra `Kelryn/sazon` (repo real ya fijado en `config.yaml`). Ver G. |
 | 12 | **QA final** (NUEVO — petición usuario, FASE FINAL): probar TODOS los botones y funciones de la app. Ver H. |
 
 ### H) Fase 12 — QA final (probar todos los botones y funciones)  *(NUEVO — petición usuario)*
@@ -214,7 +234,28 @@ por lo que "Generar menú" fallaba con `PulpSolverError` en el ejecutable (no en
 Arreglado y reconstruido (`dist/Sazon.exe`, ~79 MB). Todas las páginas y acciones verificadas
 sobre el `.exe` real.
 
-### G) Fase 11 — Módulo de actualizaciones (distribución vía GitHub)  *(NUEVO — petición usuario)*
+### G) Fase 11 — Módulo de actualizaciones (distribución vía GitHub)  ✅ *(petición usuario — HECHO)*
+
+**Publicado (2026-07-12):**
+- Repo público **[github.com/Kelryn/sazon](https://github.com/Kelryn/sazon)** (rama `master`),
+  código subido (v0.2.0). Cuenta GitHub `Kelryn`; `gh` autenticado (en
+  `C:\Program Files\GitHub CLI\gh.exe`; si PowerShell no lo ve, abrir una terminal nueva).
+- Tag `v0.2.0` → el workflow `release.yml` compiló en un runner Windows y **publicó la
+  Release v0.2.0** (3m10s) con `Sazon.exe`.
+- `config.yaml` → `actualizaciones.repo: "Kelryn/sazon"`.
+- **Módulo de actualización verificado contra GitHub real:** `hay_actualizacion('Kelryn/sazon',
+  '0.1.0')` detecta la 0.2.0 con su enlace; desde `'0.2.0'` → `None` (al día).
+- **Fix aplicado:** `installer.iss` tenía `OutputBaseFilename=MenuAlcampo-Setup` ≠
+  `Sazon-Setup.exe` que buscaba el workflow, por eso el instalador NO se adjuntó a la
+  Release v0.2.0 (solo el `.exe`). Corregido → la próxima release incluirá también
+  `Sazon-Setup.exe`.
+- **Procedimiento de release (a partir de ahora):** actualizar `version.py` (+ `pyproject`),
+  `git tag vX.Y.Z && git push origin master --tags` → Release automática. La app avisará con
+  el banner y el enlace de descarga.
+- **Nota:** el `dist/Sazon.exe` local se construyó antes de fijar el repo, así que su
+  comprobación va en blanco hasta ponerlo en Configuración → Actualizaciones; las builds de
+  CI ya lo llevan embebido.
+
 Cómo publicar nuevas versiones de la app y avisar/instalar al usuario. Hay que distinguir
 DOS tipos de actualización:
 - **Datos** (precios, ofertas, productos, recetas): YA resuelto dentro de la app
@@ -293,6 +334,24 @@ plugins, que además no están habilitados en este entorno)*:
 3. Crear logo + icono en **SVG** (y exportar `.ico` para el `.exe`).
 4. Rediseñar la UI aplicando los tokens, sin romper el "sin CDN" ni el empaquetado.
 5. Regenerar el `.exe` con el icono y la nueva imagen; mini guía de estilo.
+
+## Pendiente de implementar (resumen)
+
+Todo lo anterior de las Fases 0–12 está **hecho y publicado (v0.2.0)**. Lo que queda son
+mejoras futuras, ninguna bloqueante:
+
+1. **Racionalizar ingredientes entre recetas** (sección I) — *estudio hecho*; falta modelar
+   producto→receta en el MILP (Enfoque A: penalizar nº de productos distintos; luego B:
+   penalizar sobras). Petición del usuario; siguiente candidato natural a implementar.
+2. **Carrito de Alcampo automático** (sección D) — *estudio hecho*; falta prototipo Playwright
+   (Vía 2) + captura del endpoint OSP (Vía 1). **Requiere sesión iniciada del usuario y su OK
+   explícito antes de tocar el carrito**; la app nunca guarda la contraseña.
+3. **Penalización de ultraprocesados / NOVA** (sección B) — sin empezar; clasificar
+   `nivel_procesado` (1-4) y penalizar en el objetivo + tope semanal NOVA-4.
+4. **Extensiones de la Fase 9** — micronutrientes (BEDCA/OFF) y estacionalidad; la estructura
+   de `nutrientes.py` ya lo admite.
+5. **Selección por día del batchcooking** (sección C) — el modelo por día ya existe; falta
+   afinar postre-vs-plato y la mezcla de días tanda/no-tanda.
 
 ## Notas de diseño vigentes
 - **Sin APIs de IA en el camino por defecto.** El desambiguador LLM (Gemini/Claude) queda
