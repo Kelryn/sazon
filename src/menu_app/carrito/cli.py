@@ -1,0 +1,104 @@
+"""CLI `menu-app-carrito`: envia la compra del plan al carrito de Alcampo.
+
+Prototipo (ver ROADMAP.md D). Por defecto DRY-RUN (no toca el carrito). Para
+anadir de verdad hay que pasar --confirmar, que es el visto bueno EXPLICITO del
+usuario. La sesion se inicia a mano en la ventana del navegador; la app nunca
+guarda la contrasena.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import click
+
+from ..almacenamiento.db import get_connection, init_db
+from ..configuracion import cargar_config
+from ..optimizacion.compra import lista_compra
+from .alcampo import anadir_al_carrito, playwright_disponible
+
+_AYUDA_PLAYWRIGHT = (
+    "Falta el navegador automatizado (extra opcional 'playwright'). Instalalo con:\n"
+    "    uv sync --extra playwright\n"
+    "    uv run playwright install chromium"
+)
+
+
+@click.command()
+@click.option("--config", "config_path", default="config.yaml", type=click.Path(path_type=Path))
+@click.option("--db", "db_path", default=None, type=click.Path(path_type=Path))
+@click.option("--plan", "plan_id", default=None, help="ID del plan (por defecto, el activo).")
+@click.option(
+    "--confirmar",
+    is_flag=True,
+    help="ANADE de verdad al carrito. Sin este flag va en dry-run (solo comprueba).",
+)
+@click.option("--headless", is_flag=True, help="Sin ventana (no recomendado para el login).")
+@click.option(
+    "--reporte",
+    "reporte_path",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Guarda un JSON con el resultado y los endpoints del carrito capturados.",
+)
+def main(
+    config_path: Path,
+    db_path: Path | None,
+    plan_id: str | None,
+    confirmar: bool,
+    headless: bool,
+    reporte_path: Path | None,
+) -> None:
+    """Anade la compra del plan al carrito de compraonline.alcampo.es (prototipo)."""
+    if not playwright_disponible():
+        raise click.ClickException(_AYUDA_PLAYWRIGHT)
+
+    cfg = cargar_config(config_path)
+    db_path = db_path or Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+    conn = get_connection(db_path)
+    init_db(conn)
+    compra = lista_compra(conn, plan_id, despensa=cfg.get("despensa"))
+    conn.close()
+
+    if not compra.lineas:
+        raise click.ClickException("El plan no tiene lista de la compra (genera antes un menu).")
+
+    click.echo(
+        f"Plan {compra.plan_id or '(activo)'}: {len(compra.lineas)} productos, "
+        f"total estimado {compra.total:.2f} €."
+    )
+    if confirmar:
+        click.secho(
+            "MODO REAL: se anadiran productos a TU carrito de Alcampo. La sesion la inicias "
+            "tu en la ventana; la app no guarda tu contrasena.",
+            fg="yellow",
+        )
+    else:
+        click.echo("DRY-RUN: solo compruebo que cada ficha tiene boton de anadir (no toco el carrito).")
+
+    res = anadir_al_carrito(compra.lineas, dry_run=not confirmar, headless=headless)
+
+    click.echo("")
+    click.echo(
+        f"Sesion iniciada: {'si' if res.logueado else 'no'} | "
+        f"lineas OK: {res.n_ok}/{len(res.lineas)} | "
+        f"endpoints de carrito capturados: {len(res.endpoints_carrito)}"
+    )
+    if res.endpoints_carrito:
+        ej = res.endpoints_carrito[0]
+        click.echo(f"  Ejemplo de endpoint del carrito (Via 1 futura): {ej['metodo']} {ej['url']}")
+
+    if reporte_path is not None:
+        datos = {
+            "dry_run": res.dry_run,
+            "logueado": res.logueado,
+            "lineas": [vars(l) for l in res.lineas],
+            "endpoints_carrito": res.endpoints_carrito,
+        }
+        reporte_path.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+        click.echo(f"Reporte guardado en {reporte_path}")
+
+
+if __name__ == "__main__":
+    main()

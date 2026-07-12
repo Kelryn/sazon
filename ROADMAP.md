@@ -148,6 +148,26 @@ de compraonline.alcampo.es sin intervención manual.
   capturar el endpoint del carrito (Vía 1) para decidir cuál es más fiable. **Requiere
   sesión iniciada del usuario y su visto bueno explícito antes de tocar el carrito.**
 
+**Prototipo construido (2026-07-12):** paquete `menu_app/carrito/` + CLI `menu-app-carrito`.
+- **Diseño**: contexto Playwright **persistente** en `%LOCALAPPDATA%\Sazon\navegador_alcampo`
+  → el usuario inicia sesión UNA vez, a mano, en la ventana real de Alcampo (la app **nunca**
+  ve ni guarda la contraseña). Por cada `LineaCompra` abre la ficha y pulsa "Añadir" subiendo
+  a las `unidades` pedidas. En paralelo captura las peticiones POST/PUT/PATCH al carrito
+  (`/trolley|/basket|/cart`) para diseñar la Vía 1/API en el futuro.
+- **Seguridad**: **DRY-RUN por defecto** (solo comprueba que cada ficha tiene botón de añadir,
+  no toca el carrito). Añadir de verdad exige `--confirmar` (visto bueno explícito). UA de
+  Chrome real + `--disable-blink-features=AutomationControlled`. Playwright es extra opcional.
+- **Uso**: `uv sync --extra playwright && uv run playwright install chromium`; luego
+  `menu-app-carrito` (dry-run) o `menu-app-carrito --confirmar` (añade). `--reporte r.json`
+  guarda el resultado + endpoints capturados.
+- **Hallazgo (anti-bot)**: en modo **headless y sin sesión**, CloudFront/Akamai responde
+  «The request could not be satisfied» (bloqueo). Confirma que el flujo **debe ir con ventana
+  (headed) y sesión real del usuario** — una sesión humana e iniciada se considera legítima
+  (igual que `ingesta/playwright_fallback.py`). El código de navegador arranca, navega y
+  sondea selectores sin errores; los **selectores de "Añadir"/"+" son best-effort con varias
+  alternativas** y hay que **validarlos contra el DOM logueado real** en una ejecución
+  supervisada con el usuario (queda como siguiente paso antes de integrarlo en la web/.exe).
+
 ### E) Ampliar el corpus con cocina italiana y griega  ✅ *(petición usuario — HECHO)*
 **Realizado (2026-07-12):** ingeridas recetas mediterráneas ES/IT/GR con el flag
 `menu-app-ingestar-recetas --mediterranea` (+ `--paginas-categoria`), sembrando categorías
@@ -343,9 +363,11 @@ mejoras futuras, ninguna bloqueante:
 1. **Racionalizar ingredientes entre recetas** (sección I) — *estudio hecho*; falta modelar
    producto→receta en el MILP (Enfoque A: penalizar nº de productos distintos; luego B:
    penalizar sobras). Petición del usuario; siguiente candidato natural a implementar.
-2. **Carrito de Alcampo automático** (sección D) — *estudio hecho*; falta prototipo Playwright
-   (Vía 2) + captura del endpoint OSP (Vía 1). **Requiere sesión iniciada del usuario y su OK
-   explícito antes de tocar el carrito**; la app nunca guarda la contraseña.
+2. **Carrito de Alcampo automático** (sección D) — *estudio hecho + prototipo construido*
+   (`menu_app/carrito/`, CLI `menu-app-carrito`, dry-run por defecto). Falta **validar los
+   selectores contra el DOM logueado real** (ejecución supervisada con el usuario), y luego
+   integrarlo en la web/.exe. **Requiere sesión iniciada del usuario y su OK explícito antes
+   de tocar el carrito**; la app nunca guarda la contraseña.
 3. **Penalización de ultraprocesados / NOVA** (sección B) — sin empezar; clasificar
    `nivel_procesado` (1-4) y penalizar en el objetivo + tope semanal NOVA-4.
 4. **Extensiones de la Fase 9** — micronutrientes (BEDCA/OFF) y estacionalidad; la estructura

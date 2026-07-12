@@ -45,6 +45,7 @@ menu-app-generar-menu = "menu_app.optimizacion.cli:main"
 menu-app-clasificar-batchcooking = "menu_app.optimizacion.batchcooking_cli:main"
 menu-app-clasificar-platos = "menu_app.optimizacion.rol_plato_cli:main"
 menu-app-receta = "menu_app.recetas.manual_cli:main"
+menu-app-carrito = "menu_app.carrito.cli:main"
 menu-app-web = "menu_app.web.server:main"
 menu-app-config-clave = "menu_app.ia.config_clave_cli:main"
 
