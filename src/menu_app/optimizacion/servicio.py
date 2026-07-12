@@ -36,6 +36,8 @@ _PESOS_PCT = {
     "sabor_pct": ("peso_palatabilidad", 10.0, 50),
     "cena_ligera_pct": ("peso_cena_ligera_simple", 6.0, 50),
     "favoritas_pct": ("peso_favorita", 8.0, 50),
+    # Racionalizar la compra (que las recetas compartan productos): 0 = desactivado.
+    "reutilizacion_pct": ("peso_reutilizacion", 1.5, 0),
 }
 
 
@@ -186,6 +188,7 @@ def generar_menu(
             es_favorita=c.es_favorita,
             familia=familia_receta(c.titulo),
             grupo=grupo_receta(c.titulo, c.ingrediente_principal),
+            productos=frozenset(c.productos),
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -212,6 +215,7 @@ def generar_menu(
         peso_cena_ligera_simple=peso_interno(cfg, "cena_ligera_pct"),
         peso_favorita=peso_interno(cfg, "favoritas_pct"),
         peso_variedad=float(cfg.get("peso_variedad", 3.0)),
+        peso_reutilizacion=peso_interno(cfg, "reutilizacion_pct"),
         max_familia_libre=int(cfg.get("max_comidas_por_familia", 2)),
         min_por_grupo=(cfg.get("grupos_alimentos", {}) or {}).get("minimo_semana"),
         max_por_grupo=(cfg.get("grupos_alimentos", {}) or {}).get("maximo_semana"),

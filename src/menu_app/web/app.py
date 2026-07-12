@@ -1142,6 +1142,11 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             + _slider("favoritas_pct", "Peso favoritas", _pct(cfg, "favoritas_pct"),
                       "Ventaja de tus recetas favoritas ★ para entrar en el menú. Nunca les "
                       "permite saltarse los nutrientes.")
+            + _slider("reutilizacion_pct", "Racionalizar la compra",
+                      _pct(cfg, "reutilizacion_pct"),
+                      "Premia que las recetas compartan productos (menos productos distintos "
+                      "= menos sobras). 0 % = desactivado. Sube el tiempo de cálculo (hasta "
+                      "~25 s con valores altos); ~40 % da buen equilibrio.")
             + "</div>"
             "<label>Días batchcooking (laborales: plato único en tanda para llevar)</label>"
             f'<div style="margin:6px 0 4px">{casillas}</div>'
@@ -1208,11 +1213,17 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "sabor_pct": float(form.get("sabor_pct", 50)),
                 "cena_ligera_pct": float(form.get("cena_ligera_pct", 50)),
                 "favoritas_pct": float(form.get("favoritas_pct", 50)),
+                "reutilizacion_pct": float(form.get("reutilizacion_pct", 0)),
                 "batchcooking": {"dias": [str(d) for d in form.getlist("dias_bc")]},
             }
             # Retira las claves antiguas del overlay para que manden los %.
             cambios.update(
-                {"peso_palatabilidad": None, "peso_cena_ligera_simple": None, "peso_favorita": None}
+                {
+                    "peso_palatabilidad": None,
+                    "peso_cena_ligera_simple": None,
+                    "peso_favorita": None,
+                    "peso_reutilizacion": None,
+                }
             )
         except (TypeError, ValueError):
             return RedirectResponse("/config?msg=Error: valores no válidos.", status_code=303)

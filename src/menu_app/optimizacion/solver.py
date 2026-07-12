@@ -34,6 +34,7 @@ class RecetaOpt:
     familia: str = ""  # tipo de plato (p.ej. "salmorejo") para penalizar monotonia
     grupo: str = "otro"  # grupo de alimento del ingrediente principal (AESAN)
     es_favorita: bool = False  # marcada por el usuario: se prioriza (bonus en objetivo)
+    productos: frozenset[str] = frozenset()  # productos Alcampo que usa (racionalizar compra)
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de
@@ -177,6 +178,7 @@ def optimizar_comida_cena(
     peso_cena_ligera_simple: float = 3.0,
     peso_favorita: float = 4.0,
     peso_variedad: float = 3.0,
+    peso_reutilizacion: float = 0.0,
     max_familia_libre: int = 2,
     min_por_grupo: dict[str, int] | None = None,
     max_por_grupo: dict[str, int] | None = None,
@@ -319,6 +321,39 @@ def optimizar_comida_cena(
             prob += exceso >= pulp.lpSum(uvars) - max_familia_libre
             objetivo += peso_variedad * exceso
 
+    # RACIONALIZAR INGREDIENTES (reducir desperdicio/sobras): penaliza el nº de
+    # PRODUCTOS distintos de Alcampo que habra que comprar, para que las recetas del
+    # menu compartan ingredientes (Enfoque A del estudio, ROADMAP I). Un binario
+    # y_p=1 si algun plato seleccionado usa el producto p; se minimiza Sum(y_p).
+    # Solo se penalizan los productos POCO frecuentes en el pool (usados por entre 2
+    # y `tope_reutil` recetas): son los que de verdad discriminan (comprar un
+    # producto para UN solo plato = sobras casi seguras). Los productos usados por
+    # una sola receta no ofrecen nada que compartir; los muy comunes se compran pase
+    # lo que pase (su y_p seria ~constante) y solo cargarian el modelo. Ademas el
+    # big-M se ajusta al maximo real de usos, lo que acelera mucho el branch&bound.
+    n_binarios_reutil = 0
+    if peso_reutilizacion > 0:
+        recetas_de: dict[str, set[str]] = {}
+        uvars_de: dict[str, list] = {}
+        for u_vars, _x, pool in grupos:
+            for r in pool:
+                for p in r.productos:
+                    recetas_de.setdefault(p, set()).add(r.id)
+                    uvars_de.setdefault(p, []).append(u_vars[r.id])
+        n_recetas_pool = len({r.id for _u, _x, pool in grupos for r in pool})
+        tope_reutil = max(6, int(0.03 * n_recetas_pool))  # producto poco comun
+        idx = 0
+        for p, rset in recetas_de.items():
+            if len(rset) < 2 or len(rset) > tope_reutil:
+                continue
+            uvars = uvars_de[p]
+            big_m = min(2 * dias, len(uvars) * max_repeticiones)  # cota ajustada
+            y = pulp.LpVariable(f"prod_{idx}", cat="Binary")
+            idx += 1
+            prob += pulp.lpSum(uvars) <= big_m * y, f"reutil_{idx}"
+            objetivo += peso_reutilizacion * y
+        n_binarios_reutil = idx
+
     # Menu ALTERNATIVO: al menos `min_diferencias` huecos deben usar recetas que
     # NO esten en el menu anterior (`corte`).
     if corte:
@@ -366,9 +401,19 @@ def optimizar_comida_cena(
                 prob += total <= banda.maximo, f"max_{etiqueta}_{banda.nutriente}"
 
     prob += objetivo
-    prob.solve(pulp.PULP_CBC_CMD(msg=0))
+    # Con racionalizacion hay muchos binarios: fijamos un limite de tiempo y
+    # aceptamos el mejor menu encontrado (incumbente) aunque CBC no llegue a probar
+    # que es optimo (probar optimalidad es lo que dispara el tiempo, no encontrarlo).
+    if n_binarios_reutil > 0:
+        prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=25))
+    else:
+        prob.solve(pulp.PULP_CBC_CMD(msg=0))
     estado = pulp.LpStatus[prob.status]
-    if estado != "Optimal":
+    # Hay solucion utilizable si las variables tienen valor asignado (incumbente
+    # factible), aunque el estado no sea "Optimal" por haber agotado el tiempo.
+    todas = list(cb.values()) + list(cl.values()) + list(d.values())
+    tiene_valores = bool(todas) and all(v.value() is not None for v in todas)
+    if estado in ("Infeasible", "Unbounded") or not tiene_valores:
         return MenuOptimizado({}, 0.0, {}, False, f"sin solucion factible ({estado})")
 
     def _sel(vars_: dict) -> dict[str, int]:

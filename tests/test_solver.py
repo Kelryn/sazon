@@ -35,6 +35,50 @@ def test_suelo_de_proteina_fuerza_proteina_aunque_sea_cara():
     assert menu.nutricion_total["proteinas"] >= 200
 
 
+def _receta_prod(id, productos):
+    r = RecetaOpt(
+        id=id,
+        titulo=id,
+        coste_racion=1.0,
+        nutricion_racion={"energia_kcal": 500, "proteinas": 20.0},
+    )
+    r.productos = frozenset(productos)
+    return r
+
+
+def test_racionalizacion_prefiere_recetas_que_comparten_productos():
+    # Cuatro recetas equivalentes en coste/nutricion. p1 lo usan todas; p2 solo A y B;
+    # p3 solo C y D. Elegir DOS recetas del mismo grupo (A+B o C+D) usa menos productos
+    # distintos "poco comunes" que una pareja cruzada (A+C).
+    A = _receta_prod("A", {"p1", "p2"})
+    B = _receta_prod("B", {"p1", "p2"})
+    C = _receta_prod("C", {"p1", "p3"})
+    D = _receta_prod("D", {"p1", "p3"})
+    bandas = [BandaNutriente("energia_kcal", minimo=500, maximo=1500, unidad="kcal", tipo="banda")]
+
+    # dias=1 -> 1 comida + 1 cena = 2 huecos; max_repeticiones=1 -> dos recetas distintas.
+    menu = optimizar_comida_cena(
+        [A, B, C, D], bandas, dias=1, num_comensales=1, max_repeticiones=1,
+        frac_espanola_min=0.0, peso_reutilizacion=1.0,
+    )
+    assert menu.factible
+    elegidas = set(menu.seleccion)
+    # La pareja optima comparte grupo: {A,B} o {C,D}, nunca una cruzada.
+    assert elegidas in ({"A", "B"}, {"C", "D"}), elegidas
+
+
+def test_sin_racionalizacion_no_crea_binarios_ni_penaliza():
+    # Con peso_reutilizacion=0 (por defecto) el menu sigue siendo factible y no se
+    # ve afectado por los productos.
+    A = _receta_prod("A", {"p1", "p2"})
+    C = _receta_prod("C", {"p3", "p4"})
+    bandas = [BandaNutriente("energia_kcal", minimo=500, maximo=1500, unidad="kcal", tipo="banda")]
+    menu = optimizar_comida_cena(
+        [A, C], bandas, dias=1, num_comensales=1, max_repeticiones=2, frac_espanola_min=0.0
+    )
+    assert menu.factible
+
+
 def test_sin_suelo_elige_lo_mas_barato():
     barata = _receta("pan", coste=0.30, kcal=500, prot=2.0)
     cara = _receta("pollo", coste=1.50, kcal=500, prot=40.0)

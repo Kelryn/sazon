@@ -190,10 +190,27 @@ exóticos que no se venden.
   solo entra si TODOS sus ingredientes no opcionales tienen producto en Alcampo. Los
   opcionales se detectan por texto ("opcional", "al gusto", "para decorar"…).
 
-### I) Estudio: racionalizar ingredientes entre recetas (reducir desperdicio)  *(petición usuario — ESTUDIO HECHO, implementación pendiente)*
+### I) Racionalizar ingredientes entre recetas (reducir desperdicio)  ✅ *(petición usuario — Enfoque A IMPLEMENTADO)*
 Elegir las recetas del menú de forma que **compartan ingredientes**, para aprovechar el
 formato comprado (si el producto es 1 kg de cebolla y una receta usa 250 g, que el resto de
 recetas usen esa misma cebolla) → menos sobras, menos productos distintos y menos gasto.
+
+**Implementado (2026-07-12) — Enfoque A:**
+- `economia_recetas` expone los **productos de Alcampo que usa cada receta**; el solver los
+  recibe en `RecetaOpt.productos`.
+- En `optimizar_comida_cena`, `peso_reutilizacion` añade un binario `y_p`=1 si algún plato
+  del menú usa el producto `p`, y penaliza `Σ y_p` en el objetivo → premia reutilizar los
+  mismos productos. Config/UI: barra **`reutilizacion_pct`** (0-100, **0 = desactivado**).
+- **Rendimiento (clave)**: la versión exacta (todos los productos compartidos, sin límite)
+  tardaba **461 s** — inservible. Tratada con: (1) binarios **solo para productos poco
+  comunes** (usados por 2..~3% del pool: son los que de verdad discriminan; comprar un
+  producto para UN plato = sobras casi seguras); (2) **big-M ajustado** al máximo real de
+  usos; (3) **límite de tiempo de 25 s** aceptando el mejor menú encontrado (incumbente).
+- **Resultado medido** (plan 2 semanas, corpus real): productos distintos a comprar
+  **38 → 32-33** (−15%), coste **+~1 €**, tiempo **~6 s al 40 %** / ≤25 s al 100 %. Por
+  defecto desactivado (no afecta al rendimiento base ni a los tests).
+- **Pendiente (Enfoque B, más preciso)**: penalizar la **sobra** real
+  (`unidades·formato − gramos_necesarios`) por producto, no solo el nº de productos.
 
 **Diseño (a implementar):**
 - **Modelar el uso de PRODUCTO en el MILP**: hoy el solver solo maneja coste/nutrición
@@ -360,9 +377,9 @@ plugins, que además no están habilitados en este entorno)*:
 Todo lo anterior de las Fases 0–12 está **hecho y publicado (v0.2.0)**. Lo que queda son
 mejoras futuras, ninguna bloqueante:
 
-1. **Racionalizar ingredientes entre recetas** (sección I) — *estudio hecho*; falta modelar
-   producto→receta en el MILP (Enfoque A: penalizar nº de productos distintos; luego B:
-   penalizar sobras). Petición del usuario; siguiente candidato natural a implementar.
+1. **Racionalizar ingredientes** (sección I) — *Enfoque A IMPLEMENTADO* (barra
+   `reutilizacion_pct`, 38→32 productos, ~6 s). Falta el **Enfoque B** (penalizar la sobra
+   real por producto, no solo el nº de productos distintos).
 2. **Carrito de Alcampo automático** (sección D) — *estudio hecho + prototipo construido*
    (`menu_app/carrito/`, CLI `menu-app-carrito`, dry-run por defecto). Falta **validar los
    selectores contra el DOM logueado real** (ejecución supervisada con el usuario), y luego

@@ -95,6 +95,9 @@ class RecetaCalculada:
     falta_no_opcional: bool = False
     # Nombre normalizado del ingrediente de mayor peso (para el grupo de alimento).
     ingrediente_principal: str | None = None
+    # Productos de Alcampo (retailer_product_id) que usa la receta: sirven para
+    # racionalizar la compra (que las recetas del menu compartan productos).
+    productos: set[str] = field(default_factory=set)
 
     @property
     def cobertura(self) -> float:
@@ -162,10 +165,13 @@ def calcular_receta(
     principal_sin_producto = False
     falta_no_opcional = False
     ingrediente_principal = None
+    productos_usados: set[str] = set()
 
     for ing in ingredientes:
         rid = mapeo.get(ing["nombre_normalizado"])
         prod = productos.get(rid) if rid else None
+        if prod is not None:
+            productos_usados.add(rid)
         cantidad = ing["cantidad_metrica"]  # en g o ml
         if cantidad is None:
             # Ingrediente contado por piezas ("1 cebolla"): estima gramos por pieza.
@@ -215,6 +221,7 @@ def calcular_receta(
         nutricion={k: round(v, 1) for k, v in nutricion.items()},
         falta_no_opcional=falta_no_opcional,
         ingrediente_principal=ingrediente_principal,
+        productos=productos_usados,
         n_ingredientes=len(ingredientes),
         n_costeados=costeados,
         ingredientes_sin_producto=sin_producto,

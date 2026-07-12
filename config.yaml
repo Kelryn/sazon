@@ -27,6 +27,11 @@ sabor_pct: 50                           # cuanto premia el sabor (ratings) frent
 cena_ligera_pct: 50                     # cuanto premia que la CENA sea ligera y sencilla
 peso_variedad: 3.0                      # penalizacion por repetir TIPO de plato (variedad)
 max_comidas_por_familia: 2              # comidas del mismo tipo antes de penalizar
+reutilizacion_pct: 0                    # racionalizar la compra: 0-100. Premia que las
+                                        # recetas COMPARTAN productos de Alcampo (menos
+                                        # productos distintos = menos sobras/desperdicio).
+                                        # 0 = desactivado. Sube el tiempo de calculo (hasta
+                                        # ~25s con barras altas); ~40 da buen equilibrio.
 
 # Equilibrio por GRUPOS DE ALIMENTO (dieta mediterranea/AESAN). La receta se asigna
 # al grupo de su ingrediente principal. minimo_semana = suelo blando (se persigue);
