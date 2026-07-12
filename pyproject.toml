@@ -1,0 +1,59 @@
+[project]
+name = "menu-app"
+version = "0.2.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+# Este equipo tiene instalado Python 3.14, que cumple el minimo >=3.12.
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "click>=8.4.2",
+    "diskcache>=5.6.3",
+    "httpx[http2]>=0.28.1",
+    "anthropic>=0.116.0",
+    "google-genai>=2.10.0",
+    "keyring>=25.0",
+    "pandas>=3.0.3",
+    "pulp>=3.0",
+    "pyyaml>=6.0.3",
+    "rapidfuzz>=3.14.5",
+    "recipe-scrapers>=15.11.0",
+    "tenacity>=9.1.4",
+    "fastapi>=0.139",
+    "uvicorn[standard]>=0.51",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.32",
+    "fpdf2>=2.8",
+]
+
+[project.optional-dependencies]
+playwright = ["playwright>=1.45"]
+
+[project.scripts]
+menu-app-extraer-catalogo = "menu_app.ingesta.cli:main"
+menu-app-cargar-bd = "menu_app.almacenamiento.cli:main"
+menu-app-enriquecer = "menu_app.almacenamiento.enriquecer_cli:main"
+menu-app-estimar-frescos = "menu_app.almacenamiento.estimar_frescos_cli:main"
+menu-app-estimar-fibra = "menu_app.almacenamiento.estimar_fibra_cli:main"
+menu-app-exportar-csv = "menu_app.almacenamiento.export_csv:main"
+menu-app-verificar = "menu_app.almacenamiento.verificar_cli:main"
+menu-app-cruzar-off = "menu_app.off.cruce_cli:main"
+menu-app-ingestar-recetas = "menu_app.recetas.cli:main"
+menu-app-emparejar = "menu_app.matching.cli:main"
+menu-app-reporte-sin-match = "menu_app.matching.reporte_cli:main"
+menu-app-generar-menu = "menu_app.optimizacion.cli:main"
+menu-app-clasificar-batchcooking = "menu_app.optimizacion.batchcooking_cli:main"
+menu-app-clasificar-platos = "menu_app.optimizacion.rol_plato_cli:main"
+menu-app-receta = "menu_app.recetas.manual_cli:main"
+menu-app-web = "menu_app.web.server:main"
+menu-app-config-clave = "menu_app.ia.config_clave_cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.28,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-httpx>=0.36.2",
+]

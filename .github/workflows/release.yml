@@ -1,0 +1,55 @@
+name: Publicar release (Sazón)
+
+# Construye el .exe (PyInstaller) y el instalador (Inno Setup) en un runner
+# Windows y los adjunta a la Release al hacer push de un tag vX.Y.Z.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# La app (Fase 11) consulta la API de releases y avisa de la nueva version.
+# Nota: el .exe de CI NO incluye el catalogo (data/menu.db es un artefacto local,
+# no codigo); en el primer arranque el usuario lo descarga desde la pestaña
+# Catalogo. Para incluirlo, sube data/menu.db como artefacto antes de empaquetar.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # crear la Release y subir assets
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+
+      - name: Construir el ejecutable
+        run: pyinstaller --clean --noconfirm menu-app.spec
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Construir el instalador
+        shell: pwsh
+        run: |
+          $v = python -c "from menu_app.version import __version__; print(__version__)"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=$v installer.iss
+
+      - name: Publicar Release con los binarios
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Sazon.exe
+            dist/Sazon-Setup.exe
+          generate_release_notes: true

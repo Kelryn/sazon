@@ -1,0 +1,217 @@
+# Configuracion del proyecto.
+
+# --- Menu y comensales (Fase 5) ---
+num_comensales: 2
+kcal_por_comensal: 2000
+comidas_por_dia: ["comida", "cena"]     # franjas que planifica el menu (comida y cena)
+# Reparto de nutrientes A LO LARGO DEL DIA (minimo 3 comidas). El menu planifica
+# comida y cena; su parte del dia sale del reparto recomendado FEN/AESAN
+# (nutricion.pct_comida ~35% + nutricion.pct_cena ~30% = 65% del dia).
+semanas_plan: 2                         # nº de semanas que se planifican de una vez
+dias_repeticion: 7                      # cada cuantos dias puede REPETIRSE una receta
+                                        # (7 = no se repite dentro de la semana; 14 = tampoco
+                                        # la semana siguiente). Editable en la web.
+racion_frac_min: 0.75                   # fraccion minima de racion por persona y comida
+racion_frac_max: 1.25                   # fraccion maxima (raciones fraccionables)
+nutrientes_por_comida: true             # controla energia+proteina en CADA comida (comida/
+                                        # cena), repartiendo el objetivo del dia por su % de
+                                        # energia (FEN/AESAN) + proteina pareja (Mamerow 2014)
+cobertura_minima: 0.7                   # % minimo de ingredientes de la receta con producto
+                                        # en Alcampo para usarla (y el principal siempre debe
+                                        # tener producto)
+exigir_todos_ingredientes: true         # si true, EXCLUYE la receta si le falta cualquier
+                                        # ingrediente NO opcional en Alcampo (se detecta
+                                        # 'opcional', 'al gusto', 'para decorar'...)
+# Pesos del objetivo como PORCENTAJE 0-100 (barras en la web /config).
+sabor_pct: 50                           # cuanto premia el sabor (ratings) frente al coste
+cena_ligera_pct: 50                     # cuanto premia que la CENA sea ligera y sencilla
+peso_variedad: 3.0                      # penalizacion por repetir TIPO de plato (variedad)
+max_comidas_por_familia: 2              # comidas del mismo tipo antes de penalizar
+
+# Equilibrio por GRUPOS DE ALIMENTO (dieta mediterranea/AESAN). La receta se asigna
+# al grupo de su ingrediente principal. minimo_semana = suelo blando (se persigue);
+# maximo_semana = techo duro. Grupos: verdura, legumbre, pescado, carne_roja,
+# carne_blanca, cereal, huevo, fruta, lacteo.
+grupos_alimentos:
+  minimo_semana:
+    verdura: 3
+    legumbre: 2
+    pescado: 3
+  maximo_semana:
+    carne_roja: 3
+
+# Despensa: ingredientes que sueles tener en casa y NO quieres en la lista de la
+# compra (se casan por nombre de producto; p.ej. sal, aceite, especias).
+despensa:
+  - sal
+  - aceite de oliva
+  - pimienta
+  - vinagre
+favoritas_pct: 50                       # cuanto prioriza las recetas FAVORITAS (sin saltarse
+                                        # coste ni bandas de nutrientes)
+fraccion_recetas_espanolas_min: 0.5     # al menos 50% del menu de cocina española
+# fraccion_ingesta_menu: 0.65           # (opcional) fija a mano la fraccion del dia que
+                                        # cubre el menu; si se omite, se deriva de
+                                        # comidas_por_dia / comidas_min_dia.
+
+# Batchcooking (cocinar en tanda). El clasificador determinista marca cada receta
+# como apta o no (menu-app-clasificar-batchcooking -> recetas.es_batchcooking).
+# menu-app-generar-menu --batchcooking restringe el menu al catalogo batchcooking.
+# PENDIENTE (ver ROADMAP.md C): seleccion por dia. Un dia batchcooking = dia LABORAL
+# -> plato unico y sin postre (para transporte/oficina).
+batchcooking:
+  fraccion_batchcooking_espanolas_min: 0.5   # de las recetas batchcooking, >=50% españolas
+  # Dias LABORALES con cocinado en tanda: la COMIDA de esos dias es un plato unico
+  # del catalogo batchcooking (transportable a la oficina, sin postre). Editable
+  # tambien desde la web (/config, se guarda en config.usuario.yaml).
+  dias: []                                   # p.ej. [lun, mar, mie, jue, vie]
+
+# Objetivos nutricionales (bandas semanales por persona). Valores de referencia
+# EFSA/OMS; sobrescribe solo si sabes lo que haces.
+nutricion:
+  peso_kg_por_comensal: 70              # para el suelo de proteina (0,9 g/kg/dia)
+  proteina_g_por_kg_min: 0.9
+  sal_g_max_dia: 5.0                    # OMS <5 g/dia
+  fibra_g_min_dia: 25.0                 # EFSA >=25 g/dia
+  energia_tolerancia: 0.10             # +-10% sobre las kcal objetivo
+  # Reparto recomendado de la energia del dia (FEN/AESAN): desayuno 20-25%,
+  # media manana/merienda 10-15%, comida 30-35%, cena 25-30%.
+  pct_comida: 0.35                      # % de kcal del dia en la COMIDA
+  pct_cena: 0.30                        # % de kcal del dia en la CENA
+
+ingesta:
+  # Donde se cachean en disco las respuestas JSON de la API de Alcampo.
+  cache_dir: ".cache/alcampo"
+
+  # Espaciado minimo entre peticiones HTTP reales (no cuenta lo que viene de
+  # cache). jitter añade un extra aleatorio de hasta N segundos para no ser
+  # perfectamente periodico.
+  min_request_interval_seconds: 1.5
+  max_request_interval_jitter_seconds: 0.5
+
+  # Cuanto tiempo se reutiliza cada respuesta cacheada antes de volver a pedirla.
+  category_tree_ttl_hours: 24
+  product_page_ttl_hours: 6
+
+  # retailerCategoryId de las categorias raiz de alimentacion a recorrer
+  # (ver src/menu_app/ingesta/categories.py -- confirmadas en vivo contra la
+  # API real, DISCOVERY.md seccion 3.1.1). Si se deja vacio/comentado, se usan
+  # esas mismas por defecto.
+  category_roots:
+    - OC2112        # Frescos
+    - OC16          # Leche, Huevos, Lacteos, Yogures y Bebidas vegetales
+    - OCC10         # Alimentacion
+    - OC10          # Desayuno y Merienda
+    - OC200220183   # Congelados
+    - OC20022018    # Comida Preparada
+    - OC26112021    # Supermercado Ecologico
+    - OCC11         # Bebidas
+    - OCSINGSINL    # Sin Gluten / Sin Lactosa, Nutricion deportiva y Funcional
+    - OC09112021    # Veganos
+
+  output_csv: "data/catalogo_alcampo.csv"
+
+almacenamiento:
+  # Fichero SQLite donde se guarda el catalogo normalizado (Fase 2).
+  db_path: "data/menu.db"
+
+# Actualizaciones de la APP via GitHub Releases (Fase 11). Rellena `repo` con el
+# repositorio PUBLICO de binarios (usuario/repositorio) para activar el aviso de
+# nuevas versiones. Vacio = desactivado.
+actualizaciones:
+  repo: ""                     # p.ej. "tuusuario/sazon-releases"
+  comprobar_al_arrancar: true
+
+off:
+  # Cruce con Open Food Facts (por nombre+marca, ya que Alcampo no da EAN):
+  # aporta EAN, Nutri-Score, NOVA y alergenos.
+  cache_dir: ".cache/off"
+  # Rate limit conservador: el buscador de OFF se sobrecarga (responde 503) si
+  # se le aprieta. 3 s entre peticiones es un buen compromiso.
+  min_request_interval_seconds: 3.0
+
+recetas:
+  # Ingesta de recetas de webs ES (Fase 3) con recipe-scrapers.
+  cache_dir: ".cache/recetas"
+  min_request_interval_seconds: 1.5
+
+nutricion:
+  # Perfil nutricional POR PERSONA para las bandas semanales del optimizador.
+  # El solver respeta estas bandas como restricciones duras: en particular, el
+  # SUELO de proteina impide que el menu recorte proteina por ser cara.
+  # Fuentes: EFSA (proteina 0,83 g/kg/dia PRI; hidratos 45-60% E; grasas 20-35% E;
+  # fibra 25 g/dia), OMS (sal <5 g/dia; grasas saturadas <10% E).
+  peso_kg: 70
+  kcal_dia: 2200
+  tolerancia_energia_pct: 10       # kcal semanales +-10%
+  proteina_min_g_kg_dia: 0.83      # suelo (EFSA PRI) - NO recortable por precio
+  proteina_max_g_kg_dia: 2.0       # techo prudente
+  grasas_min_pct_e: 20
+  grasas_max_pct_e: 35
+  grasas_sat_max_pct_e: 10
+  hidratos_min_pct_e: 45
+  hidratos_max_pct_e: 60
+  # Tope sobre azucares TOTALES (nuestros datos no separan azucares libres;
+  # la OMS marca <10% E para libres -> 15% E en totales para no penalizar
+  # fruta y lacteos).
+  azucares_max_pct_e: 15
+  fibra_min_g_dia: 25
+  sal_max_g_dia: 5
+  # Micronutrientes (vitaminas/minerales): el catalogo no los publica, asi que
+  # se garantizan via raciones AESAN de grupos de alimentos en el optimizador
+  # (>=3 hortalizas/dia, 2-3 frutas/dia, >=4 legumbres/semana, <=3 carne/semana).
+
+# --- OPCIONAL / DESACTIVADO POR DEFECTO ---
+# Por decision de diseño, el motor de menus es 100% determinista y NO usa APIs
+# de IA (el espiritu de la app es el ahorro). Esta seccion solo aplica si se
+# ejecuta manualmente `menu-app-emparejar --con-llm` como refinamiento extra.
+ia:
+  proveedor: "gemini"                        # gemini (capa gratuita) | anthropic
+  modelo_desambiguador: "gemini-2.5-flash-lite"
+  min_request_interval_seconds: 7.0
+  # La clave de API se guarda con keyring (menu-app-config-clave), nunca aqui.
+
+normalizacion:
+  # Filtro "apto para receta": marca (no borra) los productos que NO sirven
+  # como ingrediente/alimento de una receta. Se pueden ajustar sin re-extraer.
+  # Categorias raiz completas que se excluyen (comparacion sin acentos/mayusc.):
+  categorias_raiz_excluidas:
+    - Bebidas          # agua, refrescos, alcohol, vino, zumos... (la leche/bebidas vegetales estan en Lacteos, y si son aptas)
+  # Palabras clave que, si aparecen en la SUBCATEGORIA, marcan el producto como
+  # NO apto (alcohol donde sea, suplementos, no-alimentario). Solo se comprueban
+  # contra la subcategoria, no contra el nombre de la categoria raiz:
+  subcategorias_excluidas_keywords:
+    - alcohol
+    - cerveza
+    - vino
+    - licor
+    - champagne
+    - cava
+    - sidra
+    - sangria
+    - vermut
+    - tinto de verano
+    - nutricion deportiva
+    - complementos naturales
+    - herbolario
+    - funcional
+    - dietetico
+    - proteina vegana
+    - golosina          # caros y malos nutricionalmente pese a palatables
+    - bolleria          # idem (incluye "Bolleria y Pasteleria")
+    - drogueria
+    - perfumeria
+  # EXCEPCION: alcohol de COCINA (se usa en recetas: vino para guisos, jerez,
+  # brandy, ron, cerveza, cava...). Estas subcategorias SI son aptas pese a lo
+  # anterior. NO incluye refrescos, zumos ni aguas. Comprobado por subcategoria.
+  subcat_alcohol_cocina:
+    - vino tinto
+    - vino blanco
+    - vino rosado
+    - dulces y olorosos     # "Vino rosados, frizzantes, dulces y olorosos"
+    - cerveza
+    - champagne
+    - cava
+    - sidra
+    - licor
+    - bebidas alcoholicas
