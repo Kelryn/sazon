@@ -49,9 +49,9 @@ _AYUDA_PLAYWRIGHT = (
     help="Deja la ventana abierta N segundos al terminar (para revisar el carrito).",
 )
 @click.option(
-    "--sin-enter",
+    "--esperar-enter",
     is_flag=True,
-    help="No esperar a que pulses ENTER tras el login; autodetectar la sesion.",
+    help="Esperar a que pulses ENTER tras el login en vez de autodetectarlo (respaldo).",
 )
 @click.option(
     "--reporte",
@@ -69,7 +69,7 @@ def main(
     limite: int | None,
     diagnostico: bool,
     mantener_abierto: int,
-    sin_enter: bool,
+    esperar_enter: bool,
     reporte_path: Path | None,
 ) -> None:
     """Anade la compra del plan al carrito de compraonline.alcampo.es (prototipo)."""
@@ -103,7 +103,7 @@ def main(
         compra.lineas, dry_run=not confirmar, headless=headless,
         limite=limite, diagnostico=diagnostico,
         mantener_abierto_ms=max(0, mantener_abierto) * 1000,
-        esperar_enter=not sin_enter,
+        esperar_enter=esperar_enter,
     )
 
     click.echo("")
@@ -111,6 +111,7 @@ def main(
         f"Sesion iniciada: {'si' if res.logueado else 'no'} | "
         f"lineas OK: {res.n_ok}/{len(res.lineas)} | "
         f"endpoints de carrito capturados: {len(res.endpoints_carrito)}"
+        + (f" | total cesta: {res.total_cesta}" if res.total_cesta else "")
     )
     if res.endpoints_carrito:
         ej = res.endpoints_carrito[0]

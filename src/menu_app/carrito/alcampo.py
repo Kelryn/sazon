@@ -91,24 +91,20 @@ _SEL_ABRIR_LOGIN = (
 # Campo de contrasena: si esta visible, ya estamos en la pantalla de login.
 _SEL_CAMPO_PASSWORD = 'input[type="password"]'
 
-# Senales de sesion iniciada / listo para comprar (si aparece cualquiera, seguimos).
-# Best-effort: Alcampo (OSP) cambia el DOM; por eso hay varias y el flujo continua
-# igualmente en dry-run aunque ninguna case.
-_SEL_LOGUEADO = (
-    'a[href*="logout"]',
-    'a[href*="cerrar-sesion"]',
-    'a[href*="/account"]',
-    'a[href*="mi-cuenta"]',
-    '[data-testid*="account" i]',
-    '[data-testid*="trolley" i]',
-    '[data-testid*="basket" i]',
-    'button[aria-label*="cuenta" i]',
-    'button[aria-label*="cesta" i]',
-    'a[aria-label*="cesta" i]',
-    'text=/mis pedidos/i',
-    'text=/cerrar sesión/i',
-    'text=/hola,/i',
+# Disparador de "Iniciar sesion" (confirmado en vivo en el Chrome del usuario: es un
+# boton/enlace por TEXTO, sin data-testid). Si es VISIBLE -> NO hay sesion.
+_SEL_LOGIN_TRIGGER = (
+    'button:has-text("Iniciar sesión")',
+    'a[href="/login"]',
+    'a:has-text("Iniciar sesión")',
 )
+# Enlace de la CESTA (siempre presente; su aria-label lleva el total: "Carrito X,XX €
+# - Ir a la pagina del carrito"). Sirve para (1) saber que el header ya renderizo y
+# (2) verificar que un producto se anadio (el total sube).
+_SEL_CESTA = 'a[href="/basket"]'
+_URL_CESTA = f"{BASE_URL}/basket"
+_URL_PAGO = f"{BASE_URL}/checkout"
+_DOMINIO = "compraonline.alcampo.es"
 
 
 @dataclass
@@ -128,6 +124,7 @@ class ResultadoCarrito:
     endpoints_carrito: list[dict[str, Any]] = field(default_factory=list)
     # Diagnostico: botones visibles del primer producto (para afinar selectores).
     botones_diagnostico: list[dict[str, str]] = field(default_factory=list)
+    total_cesta: str | None = None  # total leido de la cesta al terminar (ej. "12,34 €")
 
     @property
     def ok(self) -> bool:
@@ -217,8 +214,33 @@ def _localizar_anadir(page: Any, nombre: str):
 
 
 def _esta_logueado(page: Any) -> bool:
-    sel, _ = _primero_visible(page, _SEL_LOGUEADO)
-    return sel is not None
+    """Sesion iniciada <=> estamos en el dominio de Alcampo, el header ya renderizo
+    (enlace de cesta presente) y NO se ve el disparador de "Iniciar sesion".
+    Señal confirmada en vivo, sin conjeturas ni data-testids inexistentes."""
+    try:
+        if _DOMINIO not in (page.url or ""):
+            return False  # aun en el SSO (my.site.com) u otra pagina
+        if page.locator(_SEL_CESTA).count() == 0:
+            return False  # header no renderizado todavia: evita falsos positivos
+        for sel in _SEL_LOGIN_TRIGGER:
+            loc = page.locator(sel).first
+            if loc.count() > 0 and loc.is_visible():
+                return False  # sigue mostrando "Iniciar sesion" -> no logueado
+        return True
+    except Exception:  # noqa: BLE001 - navegando; se reintenta fuera
+        return False
+
+
+def _leer_total_cesta(page: Any) -> str | None:
+    """Total de la cesta desde el aria-label del enlace /basket ('Carrito 12,34 €...')."""
+    try:
+        aria = page.locator(_SEL_CESTA).first.get_attribute("aria-label") or ""
+        import re
+
+        m = re.search(r"([\d.,]+)\s*€", aria)
+        return m.group(0) if m else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _ir_a_login(page: Any, timeout_ms: int, log: Callable[[str], None]) -> None:
@@ -259,14 +281,18 @@ def _esperar_login(page: Any, espera_login_ms: int, log: Callable[[str], None]) 
     (al hacer login la SPA recarga y destruye el contexto de ejecucion, lo que hacia
     fallar a wait_for_selector). Nunca lanza: devuelve True si detecta sesion, o False
     si se agota el tiempo o la ventana se cierra."""
-    paso = 3000
+    paso = 2000
     transcurrido = 0
+    seguidas = 0  # exige 2 lecturas seguidas para evitar falsos positivos al cargar
     while transcurrido < espera_login_ms:
+        ok = False
         try:
-            if _esta_logueado(page):
-                return True
+            ok = _esta_logueado(page)
         except Exception:  # noqa: BLE001 - la pagina puede estar navegando; reintenta
-            pass
+            ok = False
+        seguidas = seguidas + 1 if ok else 0
+        if seguidas >= 2:
+            return True
         try:
             page.wait_for_timeout(paso)
         except Exception:  # noqa: BLE001 - ventana cerrada u otro problema: salimos
@@ -336,7 +362,7 @@ def anadir_al_carrito(
     limite: int | None = None,
     diagnostico: bool = False,
     mantener_abierto_ms: int = 0,
-    esperar_enter: bool = True,
+    esperar_enter: bool = False,
     log: Callable[[str], None] = print,
 ) -> ResultadoCarrito:
     """Abre Alcampo con sesion persistente y anade (o comprueba, en dry-run) la compra.
@@ -384,21 +410,34 @@ def anadir_al_carrito(
                 res.logueado = True
                 log("Ya habia sesion iniciada. Continuo.")
             elif esperar_enter and sys.stdin is not None and sys.stdin.isatty():
-                # Lo mas FIABLE: el propio usuario confirma cuando ha terminado, en vez
-                # de adivinar por el DOM (que cambia y daba falsos positivos/negativos).
+                # Opcional: el usuario confirma con ENTER (para casos raros de deteccion).
                 log("Inicia sesion en la ventana y pon tu codigo postal de entrega.")
                 try:
                     input(">>> Cuando hayas iniciado sesion, pulsa ENTER aqui para continuar... ")
                 except EOFError:
                     pass
-                res.logueado = True  # confiamos en la confirmacion del usuario
+                res.logueado = True
             else:
-                # Sin terminal interactiva (p.ej. lanzado desde la web): auto-deteccion.
-                log(f"Inicia sesion en la ventana (esperando hasta {espera_login_ms // 1000}s)...")
+                # Auto-deteccion FIABLE (sin ENTER): detecto cuando desaparece el boton
+                # "Iniciar sesion" y vuelves al dominio de Alcampo tras el SSO.
+                log(
+                    "Inicia sesion en la ventana y pon tu codigo postal de entrega; "
+                    f"continuo yo solo en cuanto lo detecte (hasta {espera_login_ms // 1000}s)..."
+                )
                 res.logueado = _esperar_login(page, espera_login_ms, log)
-                if not res.logueado and not dry_run:
+                if res.logueado:
+                    log("Sesion detectada. Continuo.")
+                elif not dry_run:
                     log("No se detecto sesion. Aborto sin tocar el carrito.")
                     return res
+
+            # Tras el login (SSO con redirecciones): espera a que la pagina se asiente
+            # antes de navegar, para no chocar con una navegacion en curso.
+            if res.logueado:
+                try:
+                    page.wait_for_load_state("networkidle", timeout=timeout_ms)
+                except Exception:  # noqa: BLE001
+                    pass
 
             # 2) Por cada linea: abrir ficha y anadir (o comprobar en dry-run).
             for idx, it in enumerate(items):
@@ -414,14 +453,39 @@ def anadir_al_carrito(
                 res.lineas.append(
                     _procesar_linea(page, it, dry_run=dry_run, timeout_ms=timeout_ms, log=log)
                 )
+
+            # 3) Cierre: si hemos anadido de verdad, llevamos a la CESTA y dejamos el
+            # navegador abierto para que el usuario revise y pague (no cerramos solos).
+            if not dry_run:
+                try:
+                    page.goto(_URL_CESTA, wait_until="domcontentloaded", timeout=timeout_ms)
+                    page.wait_for_timeout(1500)
+                except Exception:  # noqa: BLE001
+                    pass
+                res.total_cesta = _leer_total_cesta(page)
+                if res.total_cesta:
+                    log(f"Total de la cesta: {res.total_cesta}")
+
             if mantener_abierto_ms > 0:
-                log(f"Dejo la ventana abierta {mantener_abierto_ms // 1000}s para que revises el carrito...")
+                log(f"Dejo la ventana abierta {mantener_abierto_ms // 1000}s...")
                 try:
                     page.wait_for_timeout(mantener_abierto_ms)
-                except Exception:  # noqa: BLE001 - la ventana pudo cerrarse
+                except Exception:  # noqa: BLE001
+                    pass
+            elif not dry_run:
+                log(
+                    "Cesta lista en /basket. Te dejo el navegador ABIERTO para que revises "
+                    "y completes el pago; cierra la ventana cuando termines."
+                )
+                try:
+                    page.wait_for_event("close", timeout=0)  # espera a que cierres la ventana
+                except Exception:  # noqa: BLE001
                     pass
         finally:
-            ctx.close()
+            try:
+                ctx.close()
+            except Exception:  # noqa: BLE001 - ya cerrado por el usuario
+                pass
 
     return res
 
@@ -431,11 +495,25 @@ def _procesar_linea(
 ) -> ResultadoLinea:
     url = _url_producto(it.producto_id, it.url)
     etiqueta = f"{it.nombre or it.producto_id} (x{it.unidades})"
-    try:
-        page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-    except Exception as e:  # noqa: BLE001
-        log(f"  ✗ {etiqueta}: no cargo la ficha ({e})")
-        return ResultadoLinea(it.producto_id, it.nombre, it.unidades, False, f"ficha no cargo: {e}")
+    # goto con reintento: al volver del SSO la SPA puede seguir navegando y abortar
+    # la carga ("interrupted by another navigation"); reintentamos tras asentarse.
+    ultimo_error = ""
+    for intento in range(3):
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            ultimo_error = ""
+            break
+        except Exception as e:  # noqa: BLE001
+            ultimo_error = str(e).splitlines()[0]
+            if "interrupted by another navigation" in ultimo_error and intento < 2:
+                page.wait_for_timeout(2000)
+                continue
+            break
+    if ultimo_error:
+        log(f"  ✗ {etiqueta}: no cargo la ficha ({ultimo_error})")
+        return ResultadoLinea(
+            it.producto_id, it.nombre, it.unidades, False, f"ficha no cargo: {ultimo_error}"
+        )
 
     # Deja que la SPA pinte el boton de anadir tras cargar la ficha.
     page.wait_for_timeout(1200)
