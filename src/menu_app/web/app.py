@@ -1207,6 +1207,18 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                    "Porción más grande, en % de una ración (125 = ración y cuarto). "
                    "Puede ser mayor de 100.", "5", "50")
             + "</div><div class='row'>"
+            + _num("presupuesto_max_semana", "Presupuesto máx./semana (€)",
+                   round(float(cfg.get("presupuesto_max_semana", 0) or 0)),
+                   "Tope de gasto semanal. 0 = sin tope. Si es muy bajo puede no haber "
+                   "menú posible sin saltarse los nutrientes.", "5", "0")
+            + (
+                '<div style="flex:2 1 320px"><label>Ingredientes que NO quieres</label>'
+                '<input name="ingredientes_excluidos" '
+                f'value="{html.escape(", ".join(cfg.get("ingredientes_excluidos", []) or []))}" '
+                'placeholder="hígado, coliflor, cilantro">'
+                '<p class="note">Separa por comas. Se excluye cualquier receta que los use.</p></div>'
+            )
+            + "</div><div class='row'>"
             + _slider("sabor_pct", "Peso del sabor", _pct(cfg, "sabor_pct"),
                       "0 % = solo importa el precio; 100 % = manda el sabor (recetas mejor "
                       "valoradas) frente a que sean baratas.")
@@ -1282,6 +1294,11 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "cena_ligera_pct": float(form.get("cena_ligera_pct", 50)),
                 "favoritas_pct": float(form.get("favoritas_pct", 50)),
                 "reutilizacion_pct": float(form.get("reutilizacion_pct", 0)),
+                "presupuesto_max_semana": float(form.get("presupuesto_max_semana", 0) or 0),
+                "ingredientes_excluidos": [
+                    t.strip() for t in str(form.get("ingredientes_excluidos", "")).split(",")
+                    if t.strip()
+                ],
                 "batchcooking": {"dias": [str(d) for d in form.getlist("dias_bc")]},
             }
             # Retira las claves antiguas del overlay para que manden los %.

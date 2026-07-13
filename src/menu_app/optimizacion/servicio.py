@@ -153,10 +153,21 @@ def generar_menu(
 
     cobertura_min = float(cfg.get("cobertura_minima", COBERTURA_MINIMA))
     exigir_todos = bool(cfg.get("exigir_todos_ingredientes", True))
+    # Lista negra de ingredientes que NO se quieren en el menu (#31): se excluye la
+    # receta si alguno de sus ingredientes contiene uno de estos terminos.
+    excluidos_ing = [
+        e.strip().lower() for e in (cfg.get("ingredientes_excluidos") or []) if str(e).strip()
+    ]
     recetas: dict[str, RecetaOpt] = {}
     descartadas = 0
     descartadas_rol = 0
+    descartadas_excluidas = 0
     for c in calculadas:
+        if excluidos_ing and any(
+            term in ing for ing in c.ingredientes_norm for term in excluidos_ing
+        ):
+            descartadas_excluidas += 1
+            continue
         # Fuera si falta cobertura, si el ingrediente PRINCIPAL no se puede comprar,
         # o (exigir_todos_ingredientes) si falta CUALQUIER ingrediente no opcional:
         # no tiene sentido planificar una receta que no se puede cocinar completa.
@@ -225,6 +236,9 @@ def generar_menu(
         racion_frac_max=float(cfg.get("racion_frac_max", 1.25)),
         excluidas=excluidas,
         corte=corte,
+        presupuesto_max=float(cfg.get("presupuesto_max_semana", 0) or 0) or None,
+        tiempo_max_solver=float(cfg.get("tiempo_max_solver", 0) or 0) or None,
+        gap_solver=float(cfg.get("gap_solver", 0) or 0) or None,
     )
     return ResultadoMenu(
         menu=menu,
@@ -237,4 +251,5 @@ def generar_menu(
         descartadas_cobertura=descartadas,
         descartadas_rol=descartadas_rol,
         dias_bc=dias_bc if not batchcooking else list(_DIAS_SEMANA[:dias]),
+        meta={"descartadas_excluidas": descartadas_excluidas},
     )

@@ -181,7 +181,19 @@ CREATE TABLE IF NOT EXISTS mapeo_ingr_producto (
     -- Sin FK a productos: es una tabla derivada/cache; el rid es informativo y
     -- no debe bloquear si el catalogo se reextrae.
 );
+
+-- Indices para acelerar joins/filtros del optimizador y la lista de la compra (#83).
+-- (Los que dependen de columnas evolutivas —rol, es_batchcooking— se crean en init_db
+-- DESPUES de _migrar_columnas, ver _INDICES_POST_MIGRACION.)
+CREATE INDEX IF NOT EXISTS idx_mapeo_rid ON mapeo_ingr_producto (retailer_product_id);
+CREATE INDEX IF NOT EXISTS idx_recetas_fuente ON recetas (fuente);
 """
+
+# Indices sobre columnas que se añaden por ALTER (_migrar_columnas): se crean despues.
+_INDICES_POST_MIGRACION = (
+    "CREATE INDEX IF NOT EXISTS idx_recetas_rol ON recetas (rol)",
+    "CREATE INDEX IF NOT EXISTS idx_recetas_bc ON recetas (es_batchcooking)",
+)
 
 
 def get_connection(db_path: str | Path) -> sqlite3.Connection:
@@ -201,6 +213,11 @@ def get_connection(db_path: str | Path) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_SCHEMA)
     _migrar_columnas(conn)
+    for sql in _INDICES_POST_MIGRACION:  # tras la migracion: columnas ya existen
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass
     conn.execute(
         "INSERT INTO meta (clave, valor) VALUES ('schema_version', ?) "
         "ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor",

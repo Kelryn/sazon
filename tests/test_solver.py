@@ -67,6 +67,28 @@ def test_racionalizacion_prefiere_recetas_que_comparten_productos():
     assert elegidas in ({"A", "B"}, {"C", "D"}), elegidas
 
 
+def test_presupuesto_max_infactible_si_es_muy_bajo():
+    A = _receta_prod("A", {"p1"})  # coste_racion = 1.0
+    bandas = [BandaNutriente("energia_kcal", minimo=100, maximo=2000, unidad="kcal", tipo="banda")]
+    # dias=1 -> 2 comidas; coste minimo ~2.0; con tope 0.01 no hay solucion.
+    menu = optimizar_comida_cena(
+        [A], bandas, dias=1, num_comensales=1, max_repeticiones=3,
+        frac_espanola_min=0.0, presupuesto_max=0.01,
+    )
+    assert menu.factible is False
+
+
+def test_presupuesto_max_holgado_es_factible():
+    A = _receta_prod("A", {"p1"})
+    bandas = [BandaNutriente("energia_kcal", minimo=100, maximo=2000, unidad="kcal", tipo="banda")]
+    menu = optimizar_comida_cena(
+        [A], bandas, dias=1, num_comensales=1, max_repeticiones=3,
+        frac_espanola_min=0.0, presupuesto_max=100.0,
+    )
+    assert menu.factible is True
+    assert menu.coste_total <= 100.0
+
+
 def test_sin_racionalizacion_no_crea_binarios_ni_penaliza():
     # Con peso_reutilizacion=0 (por defecto) el menu sigue siendo factible y no se
     # ve afectado por los productos.

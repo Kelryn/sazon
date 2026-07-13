@@ -98,6 +98,8 @@ class RecetaCalculada:
     # Productos de Alcampo (retailer_product_id) que usa la receta: sirven para
     # racionalizar la compra (que las recetas del menu compartan productos).
     productos: set[str] = field(default_factory=set)
+    # Nombres normalizados de TODOS los ingredientes (para excluir por lista negra).
+    ingredientes_norm: set[str] = field(default_factory=set)
 
     @property
     def cobertura(self) -> float:
@@ -166,8 +168,11 @@ def calcular_receta(
     falta_no_opcional = False
     ingrediente_principal = None
     productos_usados: set[str] = set()
+    ingredientes_norm: set[str] = set()
 
     for ing in ingredientes:
+        if ing["nombre_normalizado"]:
+            ingredientes_norm.add(ing["nombre_normalizado"])
         rid = mapeo.get(ing["nombre_normalizado"])
         prod = productos.get(rid) if rid else None
         if prod is not None:
@@ -222,6 +227,7 @@ def calcular_receta(
         falta_no_opcional=falta_no_opcional,
         ingrediente_principal=ingrediente_principal,
         productos=productos_usados,
+        ingredientes_norm=ingredientes_norm,
         n_ingredientes=len(ingredientes),
         n_costeados=costeados,
         ingredientes_sin_producto=sin_producto,

@@ -190,6 +190,9 @@ def optimizar_comida_cena(
     corte: set[str] | None = None,
     min_diferencias: int = 2,
     suelos_blandos: frozenset[str] = SUELOS_BLANDOS_DEFECTO,
+    presupuesto_max: float | None = None,
+    tiempo_max_solver: float | None = None,
+    gap_solver: float | None = None,
 ) -> MenuOptimizado:
     """Menu con dos franjas: COMIDA (mediodia) y CENA, `dias` de cada una.
 
@@ -400,14 +403,29 @@ def optimizar_comida_cena(
             if banda.maximo is not None:
                 prob += total <= banda.maximo, f"max_{etiqueta}_{banda.nutriente}"
 
+    # PRESUPUESTO maximo de la semana (tope de € DURO, #25): coste real servido
+    # (raciones x coste/racion x comensales). Puede hacer el problema infactible si
+    # choca con los suelos de nutrientes -> se reporta como no factible.
+    if presupuesto_max is not None and presupuesto_max > 0:
+        coste_expr = pulp.lpSum(
+            x_vars[r.id] * por_id[r.id].coste_racion * num_comensales
+            for _u, x_vars, pool in grupos
+            for r in pool
+        )
+        prob += coste_expr <= presupuesto_max, "presupuesto_max"
+
     prob += objetivo
-    # Con racionalizacion hay muchos binarios: fijamos un limite de tiempo y
-    # aceptamos el mejor menu encontrado (incumbente) aunque CBC no llegue a probar
-    # que es optimo (probar optimalidad es lo que dispara el tiempo, no encontrarlo).
-    if n_binarios_reutil > 0:
-        prob.solve(pulp.PULP_CBC_CMD(msg=0, timeLimit=25))
-    else:
-        prob.solve(pulp.PULP_CBC_CMD(msg=0))
+    # Parametros del CBC (#36): limite de tiempo y gap relativo configurables. Con
+    # racionalizacion hay muchos binarios -> un limite de tiempo evita que probar la
+    # optimalidad dispare el calculo (se acepta el mejor menu encontrado).
+    kw = {"msg": 0}
+    if tiempo_max_solver and tiempo_max_solver > 0:
+        kw["timeLimit"] = tiempo_max_solver
+    elif n_binarios_reutil > 0:
+        kw["timeLimit"] = 25
+    if gap_solver and gap_solver > 0:
+        kw["gapRel"] = gap_solver
+    prob.solve(pulp.PULP_CBC_CMD(**kw))
     estado = pulp.LpStatus[prob.status]
     # Hay solucion utilizable si las variables tienen valor asignado (incumbente
     # factible), aunque el estado no sea "Optimal" por haber agotado el tiempo.

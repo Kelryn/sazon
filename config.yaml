@@ -27,6 +27,16 @@ sabor_pct: 50                           # cuanto premia el sabor (ratings) frent
 cena_ligera_pct: 50                     # cuanto premia que la CENA sea ligera y sencilla
 peso_variedad: 3.0                      # penalizacion por repetir TIPO de plato (variedad)
 max_comidas_por_familia: 2              # comidas del mismo tipo antes de penalizar
+# Presupuesto maximo por SEMANA en euros (tope duro). 0 = sin tope. Si choca con los
+# suelos de nutrientes puede hacer el menu infactible.
+presupuesto_max_semana: 0
+# Ingredientes que NO quieres en el menu (lista negra): se excluye la receta si alguno
+# de sus ingredientes contiene uno de estos terminos. Ej: [higado, coliflor, cilantro].
+ingredientes_excluidos: []
+# Parametros del solver MILP (avanzado): tiempo maximo (s) y gap relativo (0-1). 0 = sin
+# limite. Utiles si con racionalizacion alta el calculo tarda demasiado.
+tiempo_max_solver: 0
+gap_solver: 0
 reutilizacion_pct: 0                    # racionalizar la compra: 0-100. Premia que las
                                         # recetas COMPARTAN productos de Alcampo (menos
                                         # productos distintos = menos sobras/desperdicio).
