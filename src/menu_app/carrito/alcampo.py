@@ -77,9 +77,9 @@ _SEL_CESTA = 'a[href="/basket"]'
 _URL_CESTA = f"{BASE_URL}/basket"
 _DOMINIO = "compraonline.alcampo.es"
 
-# Tope de pestañas anadiendo a la vez (0 = sin tope, todas a la vez). Un tope evita
-# saturar el anti-bot con decenas de peticiones simultaneas.
-_PARALELO_DEFECTO = 8
+# Tope de pestañas anadiendo a la vez (0 = sin tope, TODAS a la vez, por defecto:
+# validado en vivo, el anti-bot lo aguanta). Se puede limitar si hiciera falta.
+_PARALELO_DEFECTO = 0
 
 
 @dataclass

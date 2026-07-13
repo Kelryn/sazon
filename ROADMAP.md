@@ -108,7 +108,19 @@ marcar días concretos como "batchcooking" y que ese día se cocine en tanda.
 - **Config prevista**: sección `batchcooking:` con los días marcados como laborales/tanda
   (p.ej. `dias_laborales: [lun,mar,mie,jue,vie]`) y `fraccion_batchcooking_espanolas_min: 0.5`.
 
-### D) Estudio: añadir la compra automáticamente al carrito de Alcampo  *(NUEVO — petición usuario)*
+### D) Añadir la compra automáticamente al carrito de Alcampo  ✅ *(petición usuario — PROTOTIPO VALIDADO)*
+
+**Validado de punta a punta (2026-07-12):** `menu-app-carrito --confirmar` añade la compra
+completa del plan al carrito real de Alcampo (probado: 30/31, 1 agotado, 153 €). Playwright
+**asíncrono**: tras el login (autodetección por "Mi cuenta"/ausencia de "Iniciar sesión", sin
+ENTER) abre **una pestaña por producto y las añade TODAS en paralelo** (`asyncio.gather`, por
+defecto sin tope — el anti-bot lo aguanta), sube cantidades con el stepper
+"Aumentar la cantidad de {nombre}", salta agotados (aria-disabled), y al terminar abre `/basket`
+y cierra las pestañas de producto dejando la ventana abierta para pagar. Sesión y contraseña
+SIEMPRE del usuario (perfil persistente; la app nunca ve la contraseña). Pendiente: integrar
+como botón "Enviar al carrito de Alcampo" en la web/.exe. Detalles y hallazgos abajo.
+
+### D-bis) Estudio original *(referencia)*
 Objetivo: que la app coja la lista de la compra y **añada los productos a la cesta**
 de compraonline.alcampo.es sin intervención manual.
 

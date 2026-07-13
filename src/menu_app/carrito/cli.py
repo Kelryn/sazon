@@ -38,9 +38,9 @@ _AYUDA_PLAYWRIGHT = (
 @click.option("--limite", default=None, type=int, help="Prueba solo los primeros N productos.")
 @click.option(
     "--paralelo",
-    default=8,
+    default=0,
     type=int,
-    help="Nº de productos anadiendose a la vez (0 = todos a la vez). Por defecto 8.",
+    help="Nº de productos anadiendose a la vez (0 = todos a la vez, por defecto).",
 )
 @click.option(
     "--diagnostico",
