@@ -19,7 +19,11 @@ import time
 
 import uvicorn
 
-from .lanzador import _dir_bundle, _dir_datos, _puerto_libre, _sembrar
+# Import ABSOLUTO (no relativo): PyInstaller ejecuta este fichero como script
+# principal ("__main__"), sin paquete padre, y un "from .lanzador import ..."
+# revienta con "attempted relative import with no known parent package". Con
+# pathex=["src"] en el .spec, "menu_app" es importable de forma absoluta.
+from menu_app.lanzador import _dir_bundle, _dir_datos, _puerto_libre, _sembrar
 
 
 def _arrancar_servidor(config_path, puerto: int) -> None:
@@ -67,7 +71,7 @@ def main() -> None:
 
     import webview  # import diferido (dependencia de escritorio)
 
-    from .marca import ESLOGAN, NOMBRE
+    from menu_app.web.marca import ESLOGAN, NOMBRE  # absoluto (ver nota de import arriba)
 
     webview.create_window(
         f"{NOMBRE} — {ESLOGAN}",
