@@ -68,14 +68,9 @@ _SEL_ANADIR = (
     'button[aria-label*="Añadir" i]',
     'button:has-text("Añadir")',
 )
-# Selectores del "+" para subir cantidad una vez anadido.
-_SEL_INCREMENTO = (
-    '[data-testid="increment"]',
-    'button[aria-label*="Aumentar" i]',
-    'button[aria-label*="Increase" i]',
-    'button[aria-label*="más" i]',
-    'button:has-text("+")',
-)
+# "+" para subir cantidad tras anadir (confirmado en vivo): el aria-label real es
+# "Aumentar la cantidad de {nombre} en el carrito".
+_SEL_INCREMENTO = 'button[aria-label^="Aumentar la cantidad"]'
 # Disparadores para ABRIR el formulario de login desde la home (si la URL directa
 # no muestra ya el formulario).
 _SEL_ABRIR_LOGIN = (
@@ -97,6 +92,12 @@ _SEL_LOGIN_TRIGGER = (
     'button:has-text("Iniciar sesión")',
     'a[href="/login"]',
     'a:has-text("Iniciar sesión")',
+)
+# Señal POSITIVA de sesion iniciada (confirmada en vivo): logueado -> boton
+# "Mi cuenta"; deslogueado -> "Iniciar sesion". Es la mas rapida y fiable.
+_SEL_CUENTA = (
+    'button:has-text("Mi cuenta")',
+    'a:has-text("Mi cuenta")',
 )
 # Enlace de la CESTA (siempre presente; su aria-label lleva el total: "Carrito X,XX €
 # - Ir a la pagina del carrito"). Sirve para (1) saber que el header ya renderizo y
@@ -199,18 +200,64 @@ def _primero_visible(page: Any, selectores: Iterable[str]):
     return None, None
 
 
+def _norm(texto: str) -> str:
+    import re
+
+    return re.sub(r"\s+", " ", (texto or "")).strip().lower()
+
+
 def _localizar_anadir(page: Any, nombre: str):
-    """Localiza EL boton de anadir del producto principal, evitando los del carrusel
-    de recomendados. Prioriza el que lleva el NOMBRE del producto en su aria-label
-    (`Añadir {nombre} al carrito`); si no, cae al primer boton de anadir del DOM."""
-    if nombre:
-        try:
-            loc = page.get_by_role("button", name=nombre).first
-            if loc.count() > 0 and loc.is_visible():
-                return "por-nombre", loc
-        except Exception:  # noqa: BLE001 - nombre con caracteres raros, etc.
-            pass
+    """Localiza EL boton de anadir del producto principal. El aria-label real es
+    'Añadir {nombre} al carrito'. IMPORTANTE: el boton de la IMAGEN del producto
+    tambien lleva el nombre ('Diapositiva ... {nombre}'), por eso exigimos que el
+    aria-label EMPIECE por 'Añadir' (descarta la imagen); entre los que quedan (el
+    principal + carrusel de recomendados) se elige el que contiene el NOMBRE."""
+    try:
+        botones = page.locator('button[aria-label^="Añadir"][aria-label*="al carrito"]')
+        total = botones.count()
+        nucleo = _norm(nombre)
+        primero = None
+        for i in range(min(total, 40)):
+            b = botones.nth(i)
+            try:
+                if not b.is_visible():
+                    continue
+                al = _norm(b.get_attribute("aria-label") or "")
+            except Exception:  # noqa: BLE001
+                continue
+            if nucleo and nucleo in al:
+                return "aria-nombre", b
+            if primero is None:
+                primero = b
+        if primero is not None:
+            return "aria-primero", primero
+    except Exception:  # noqa: BLE001
+        pass
     return _primero_visible(page, _SEL_ANADIR)
+
+
+def _localizar_incremento(page: Any, nombre: str):
+    """Boton '+' del producto ya en la cesta: 'Aumentar la cantidad de {nombre}...'."""
+    try:
+        botones = page.locator(_SEL_INCREMENTO)
+        total = botones.count()
+        nucleo = _norm(nombre)
+        primero = None
+        for i in range(min(total, 40)):
+            b = botones.nth(i)
+            try:
+                if not b.is_visible():
+                    continue
+                al = _norm(b.get_attribute("aria-label") or "")
+            except Exception:  # noqa: BLE001
+                continue
+            if nucleo and nucleo in al:
+                return b
+            if primero is None:
+                primero = b
+        return primero
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _esta_logueado(page: Any) -> bool:
@@ -220,6 +267,12 @@ def _esta_logueado(page: Any) -> bool:
     try:
         if _DOMINIO not in (page.url or ""):
             return False  # aun en el SSO (my.site.com) u otra pagina
+        # Señal POSITIVA y rapida: aparece el boton "Mi cuenta".
+        for sel in _SEL_CUENTA:
+            loc = page.locator(sel).first
+            if loc.count() > 0 and loc.is_visible():
+                return True
+        # Señal NEGATIVA (respaldo): header renderizado y sin "Iniciar sesion".
         if page.locator(_SEL_CESTA).count() == 0:
             return False  # header no renderizado todavia: evita falsos positivos
         for sel in _SEL_LOGIN_TRIGGER:
@@ -531,17 +584,26 @@ def _procesar_linea(
         )
 
     try:
+        total_antes = _leer_total_cesta(page)
         boton.click(timeout=timeout_ms)
+        page.wait_for_timeout(1800)  # deja que registre el anadido y aparezca el stepper
         anadidas = 1
-        # Subir a las unidades pedidas con el "+".
+        # Subir a las unidades pedidas con el "+" (stepper del propio producto).
         for _ in range(it.unidades - 1):
-            isel, inc = _primero_visible(page, _SEL_INCREMENTO)
+            inc = _localizar_incremento(page, it.nombre)
             if inc is None:
                 break
-            inc.click(timeout=timeout_ms)
+            try:
+                inc.click(timeout=timeout_ms)
+            except Exception:  # noqa: BLE001
+                break
+            page.wait_for_timeout(1200)
             anadidas += 1
-        detalle = f"anadidas {anadidas}/{it.unidades} [{sel}]"
-        ok = anadidas >= 1
+        total_despues = _leer_total_cesta(page)
+        # Verificacion real: el total de la cesta ha cambiado tras anadir.
+        cambio = total_despues is not None and total_despues != total_antes
+        ok = cambio or (total_despues not in (None, "0,00 €"))
+        detalle = f"anadidas {anadidas}/{it.unidades} [{sel}]; cesta {total_antes}->{total_despues}"
         log(f"  {'✓' if ok else '✗'} {etiqueta}: {detalle}")
         return ResultadoLinea(it.producto_id, it.nombre, it.unidades, ok, detalle)
     except Exception as e:  # noqa: BLE001
