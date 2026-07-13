@@ -572,6 +572,11 @@ def _procesar_linea(
     page.wait_for_timeout(1200)
     sel, boton = _localizar_anadir(page, it.nombre)
     if boton is None:
+        # Si ya aparece el stepper, el producto YA esta en la cesta (no es un fallo).
+        if _localizar_incremento(page, it.nombre) is not None:
+            total = _leer_total_cesta(page)
+            log(f"  ✓ {etiqueta}: ya estaba en la cesta (total {total})")
+            return ResultadoLinea(it.producto_id, it.nombre, it.unidades, True, "ya en la cesta")
         log(f"  ✗ {etiqueta}: no encontre boton de anadir")
         return ResultadoLinea(
             it.producto_id, it.nombre, it.unidades, False, "sin boton de anadir"
