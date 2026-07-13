@@ -53,15 +53,16 @@ _TIMEOUT_LANZAMIENTO_MS = 120_000
 # Se vigilan para capturar la forma de la API (Via 1) sin reconstruirla a mano.
 _FRAGMENTOS_CARRITO = ("/trolley", "/basket", "/cart")
 
-# Selectores del boton "Anadir" (best-effort; OSP/Alcampo cambia el DOM sin aviso,
-# por eso hay varias alternativas y el dry-run reporta cual funciono).
+# Selectores del boton "Anadir" (confirmado en vivo: el boton real es
+# <button aria-label="Añadir {producto} al carrito">Añadir</button>). OJO: la ficha
+# tiene MUCHOS botones "Añadir" (carrusel de productos recomendados), por eso lo
+# ideal es apuntar por el NOMBRE del producto (ver _localizar_anadir); estos son el
+# respaldo generico. El principal suele ser el primero del DOM.
 _SEL_ANADIR = (
-    '[data-testid="add-to-trolley"]',
-    '[data-testid="addButton"]',
+    'button[aria-label^="Añadir"][aria-label*="al carrito" i]',
+    'button[aria-label*="Añadir" i][aria-label*="carrito" i]',
     'button[aria-label*="Añadir" i]',
-    'button[aria-label*="Add" i]',
     'button:has-text("Añadir")',
-    'button:has-text("Add")',
 )
 # Selectores del "+" para subir cantidad una vez anadido.
 _SEL_INCREMENTO = (
@@ -182,6 +183,20 @@ def _primero_visible(page: Any, selectores: Iterable[str]):
     return None, None
 
 
+def _localizar_anadir(page: Any, nombre: str):
+    """Localiza EL boton de anadir del producto principal, evitando los del carrusel
+    de recomendados. Prioriza el que lleva el NOMBRE del producto en su aria-label
+    (`Añadir {nombre} al carrito`); si no, cae al primer boton de anadir del DOM."""
+    if nombre:
+        try:
+            loc = page.get_by_role("button", name=nombre).first
+            if loc.count() > 0 and loc.is_visible():
+                return "por-nombre", loc
+        except Exception:  # noqa: BLE001 - nombre con caracteres raros, etc.
+            pass
+    return _primero_visible(page, _SEL_ANADIR)
+
+
 def _esta_logueado(page: Any) -> bool:
     sel, _ = _primero_visible(page, _SEL_LOGUEADO)
     return sel is not None
@@ -268,6 +283,7 @@ def anadir_al_carrito(
     espera_login_ms: int = 180_000,
     limite: int | None = None,
     diagnostico: bool = False,
+    mantener_abierto_ms: int = 0,
     log: Callable[[str], None] = print,
 ) -> ResultadoCarrito:
     """Abre Alcampo con sesion persistente y anade (o comprueba, en dry-run) la compra.
@@ -344,6 +360,12 @@ def anadir_al_carrito(
                 res.lineas.append(
                     _procesar_linea(page, it, dry_run=dry_run, timeout_ms=timeout_ms, log=log)
                 )
+            if mantener_abierto_ms > 0:
+                log(f"Dejo la ventana abierta {mantener_abierto_ms // 1000}s para que revises el carrito...")
+                try:
+                    page.wait_for_timeout(mantener_abierto_ms)
+                except Exception:  # noqa: BLE001 - la ventana pudo cerrarse
+                    pass
         finally:
             ctx.close()
 
@@ -361,7 +383,9 @@ def _procesar_linea(
         log(f"  ✗ {etiqueta}: no cargo la ficha ({e})")
         return ResultadoLinea(it.producto_id, it.nombre, it.unidades, False, f"ficha no cargo: {e}")
 
-    sel, boton = _primero_visible(page, _SEL_ANADIR)
+    # Deja que la SPA pinte el boton de anadir tras cargar la ficha.
+    page.wait_for_timeout(1200)
+    sel, boton = _localizar_anadir(page, it.nombre)
     if boton is None:
         log(f"  ✗ {etiqueta}: no encontre boton de anadir")
         return ResultadoLinea(

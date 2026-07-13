@@ -42,6 +42,13 @@ _AYUDA_PLAYWRIGHT = (
     help="Vuelca los botones del primer producto (para afinar los selectores de 'Anadir').",
 )
 @click.option(
+    "--mantener-abierto",
+    "mantener_abierto",
+    default=0,
+    type=int,
+    help="Deja la ventana abierta N segundos al terminar (para revisar el carrito).",
+)
+@click.option(
     "--reporte",
     "reporte_path",
     default=None,
@@ -56,6 +63,7 @@ def main(
     headless: bool,
     limite: int | None,
     diagnostico: bool,
+    mantener_abierto: int,
     reporte_path: Path | None,
 ) -> None:
     """Anade la compra del plan al carrito de compraonline.alcampo.es (prototipo)."""
@@ -88,6 +96,7 @@ def main(
     res = anadir_al_carrito(
         compra.lineas, dry_run=not confirmar, headless=headless,
         limite=limite, diagnostico=diagnostico,
+        mantener_abierto_ms=max(0, mantener_abierto) * 1000,
     )
 
     click.echo("")
