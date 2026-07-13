@@ -292,16 +292,35 @@ def _esta_logueado(page: Any) -> bool:
         return False
 
 
+def _aria_cesta(page: Any) -> str:
+    """aria-label completo del enlace de cesta ('Carrito 12,34 € - Ir a...')."""
+    try:
+        return page.locator(_SEL_CESTA).first.get_attribute("aria-label") or ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _leer_total_cesta(page: Any) -> str | None:
     """Total de la cesta desde el aria-label del enlace /basket ('Carrito 12,34 €...')."""
-    try:
-        aria = page.locator(_SEL_CESTA).first.get_attribute("aria-label") or ""
-        import re
+    import re
 
-        m = re.search(r"([\d.,]+)\s*€", aria)
-        return m.group(0) if m else None
-    except Exception:  # noqa: BLE001
-        return None
+    m = re.search(r"([\d.,]+)\s*€", _aria_cesta(page))
+    return m.group(0) if m else None
+
+
+def _esperar_aria_distinta(page: Any, aria_antes: str, timeout_ms: int = 10_000) -> bool:
+    """Espera (por evento) a que el aria-label de la cesta cambie respecto a `aria_antes`
+    -> confirma que la ultima pulsacion actualizo el carrito. Sin sleeps fijos."""
+    try:
+        page.wait_for_function(
+            "prev => { const a = document.querySelector('a[href=\"/basket\"]');"
+            " return a && (a.getAttribute('aria-label') || '') !== prev; }",
+            arg=aria_antes,
+            timeout=timeout_ms,
+        )
+        return True
+    except Exception:  # noqa: BLE001 - si no cambia a tiempo, seguimos (se verifica luego)
+        return False
 
 
 def _ir_a_login(page: Any, timeout_ms: int, log: Callable[[str], None]) -> None:
@@ -462,7 +481,7 @@ def anadir_al_carrito(
                         pass
                     res.endpoints_carrito.append(entrada)
 
-            page.on("request", _on_request)
+            ctx.on("request", _on_request)  # captura en TODAS las pestañas
 
             # 1) Sesion. La inicia el usuario a mano (nunca guardamos la contrasena).
             # Le llevamos directo al formulario de login para que no tenga que buscarlo.
@@ -500,32 +519,52 @@ def anadir_al_carrito(
                 except Exception:  # noqa: BLE001
                     pass
 
-            # 2) Por cada linea: abrir ficha y anadir (o comprobar en dry-run).
+            # 2) Cada producto en su PROPIA pestaña: se abre, se anaden sus unidades
+            # (esperas por EVENTO, sin sleeps fijos) y se deja abierta hasta el final.
+            tabs_producto: list[Any] = []
             for idx, it in enumerate(items):
+                tab = ctx.new_page()
+                tabs_producto.append(tab)
                 if diagnostico and idx == 0:
-                    url = _url_producto(it.producto_id, it.url)
                     try:
-                        page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                        page.wait_for_timeout(1500)  # deja que la SPA pinte los botones
-                        res.botones_diagnostico = diagnostico_botones(page)
-                        log(f"Diagnostico: {len(res.botones_diagnostico)} botones visibles en {it.nombre}")
+                        tab.goto(_url_producto(it.producto_id, it.url),
+                                 wait_until="domcontentloaded", timeout=timeout_ms)
+                        tab.wait_for_selector(
+                            'button[data-synthetics="add-button"]', timeout=timeout_ms
+                        )
+                        res.botones_diagnostico = diagnostico_botones(tab)
+                        log(f"Diagnostico: {len(res.botones_diagnostico)} botones en {it.nombre}")
                     except Exception as e:  # noqa: BLE001
                         log(f"Diagnostico fallido: {e}")
                 res.lineas.append(
-                    _procesar_linea(page, it, dry_run=dry_run, timeout_ms=timeout_ms, log=log)
+                    _procesar_linea(tab, it, dry_run=dry_run, timeout_ms=timeout_ms, log=log)
                 )
 
-            # 3) Cierre: si hemos anadido de verdad, llevamos a la CESTA y dejamos el
-            # navegador abierto para que el usuario revise y pague (no cerramos solos).
+            # 3) Abrir la CESTA (reutilizando la pestaña inicial) y CERRAR las de producto.
             if not dry_run:
                 try:
                     page.goto(_URL_CESTA, wait_until="domcontentloaded", timeout=timeout_ms)
-                    page.wait_for_timeout(1500)
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=timeout_ms)
+                    except Exception:  # noqa: BLE001
+                        pass
                 except Exception:  # noqa: BLE001
                     pass
                 res.total_cesta = _leer_total_cesta(page)
                 if res.total_cesta:
                     log(f"Total de la cesta: {res.total_cesta}")
+                try:
+                    page.bring_to_front()
+                except Exception:  # noqa: BLE001
+                    pass
+            # Cerrar las pestañas de producto (deja solo la cesta).
+            for tab in tabs_producto:
+                try:
+                    tab.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            if not dry_run:
+                log("Cesta abierta con todos los productos; cerradas las pestañas de producto.")
 
             if mantener_abierto_ms > 0:
                 log(f"Dejo la ventana abierta {mantener_abierto_ms // 1000}s...")
@@ -576,8 +615,14 @@ def _procesar_linea(
             it.producto_id, it.nombre, it.unidades, False, f"ficha no cargo: {ultimo_error}"
         )
 
-    # Deja que la SPA pinte el boton de anadir tras cargar la ficha.
-    page.wait_for_timeout(1200)
+    # Espera por EVENTO a que la SPA pinte el control (boton de anadir o stepper),
+    # en vez de un sleep fijo.
+    try:
+        page.wait_for_selector(
+            'button[data-synthetics="add-button"], ' + _SEL_INCREMENTO, timeout=12_000
+        )
+    except Exception:  # noqa: BLE001
+        pass
     sel, boton = _localizar_anadir(page, it.nombre)
     if boton is None:
         # Si ya aparece el stepper, el producto YA esta en la cesta (no es un fallo).
@@ -612,11 +657,15 @@ def _procesar_linea(
 
     try:
         total_antes = _leer_total_cesta(page)
+        aria = _aria_cesta(page)
         boton.click(timeout=timeout_ms)
-        page.wait_for_timeout(1800)  # deja que registre el anadido y aparezca el stepper
+        # Espera por EVENTO a que el total de la cesta cambie (confirma que registro),
+        # en vez de un sleep fijo. Garantiza que cada pulsacion cuenta.
+        _esperar_aria_distinta(page, aria, timeout_ms=10_000)
         anadidas = 1
         # Subir a las unidades pedidas con el "+" (stepper del propio producto).
         for _ in range(it.unidades - 1):
+            aria = _aria_cesta(page)
             inc = _localizar_incremento(page, it.nombre)
             if inc is None:
                 break
@@ -624,7 +673,7 @@ def _procesar_linea(
                 inc.click(timeout=timeout_ms)
             except Exception:  # noqa: BLE001
                 break
-            page.wait_for_timeout(1200)
+            _esperar_aria_distinta(page, aria, timeout_ms=10_000)
             anadidas += 1
         total_despues = _leer_total_cesta(page)
         # Verificacion real: el total de la cesta ha cambiado tras anadir.
