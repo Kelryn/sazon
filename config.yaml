@@ -120,11 +120,10 @@ almacenamiento:
   # Fichero SQLite donde se guarda el catalogo normalizado (Fase 2).
   db_path: "data/menu.db"
 
-# Actualizaciones de la APP via GitHub Releases (Fase 11). Rellena `repo` con el
-# repositorio PUBLICO de binarios (usuario/repositorio) para activar el aviso de
-# nuevas versiones. Vacio = desactivado.
+# Actualizaciones de la APP via GitHub Releases (Fase 11). El repositorio esta FIJO
+# en el codigo (menu_app/actualizaciones.py: Kelryn/sazon); no se configura aqui.
+# Solo se puede desactivar la comprobacion automatica al arrancar.
 actualizaciones:
-  repo: "Kelryn/sazon"         # repo publico de releases (comprueba nuevas versiones)
   comprobar_al_arrancar: true
 
 off:

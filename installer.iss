@@ -27,6 +27,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; No requiere admin: instala en la carpeta del usuario.
 PrivilegesRequired=lowest
 WizardStyle=modern
+; Al actualizar, cierra Sazon si esta abierto (para reemplazar el .exe en uso) y lo
+; vuelve a abrir al terminar. Necesario para el auto-update desde la propia app.
+CloseApplications=yes
+RestartApplications=yes
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"

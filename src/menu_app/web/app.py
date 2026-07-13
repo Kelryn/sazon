@@ -20,11 +20,12 @@ import html
 import threading
 from collections import deque
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from ..actualizaciones import hay_actualizacion
+from ..actualizaciones import hay_actualizacion, instalar
 from ..almacenamiento.actualizar import actualizar_catalogo
 from ..almacenamiento.db import get_connection, init_db
 from ..version import __version__
@@ -159,10 +160,9 @@ _CATALOGO = {"activa": False, "log": deque(maxlen=300), "resumen": ""}
 _ACTUALIZACION = {"estado": None, "comprobado": False}
 
 
-def _comprobar_actualizacion(cfg: dict) -> None:
-    """Consulta GitHub (una vez) y guarda el resultado en cache."""
-    repo = (cfg.get("actualizaciones", {}) or {}).get("repo")
-    _ACTUALIZACION["estado"] = hay_actualizacion(repo)
+def _comprobar_actualizacion() -> None:
+    """Consulta GitHub (una vez, repo fijo) y guarda el resultado en cache."""
+    _ACTUALIZACION["estado"] = hay_actualizacion()
     _ACTUALIZACION["comprobado"] = True
 
 
@@ -175,7 +175,8 @@ def _banner_actualizacion() -> str:
         f'<div class="card" style="border-left:4px solid var(--dorado)">'
         f'✨ <b>Nueva versión disponible: {html.escape(info.version)}</b> '
         f'(tienes la {__version__}). '
-        f'<a class="btn mini" href="{html.escape(info.url_descarga)}" target="_blank">Descargar</a> '
+        f'<form method="post" action="/actualizaciones/comprobar" style="display:inline">'
+        f'<button class="btn mini" type="submit">Instalar</button></form> '
         f'<a class="meta" href="{html.escape(info.url_pagina)}" target="_blank">ver novedades</a></div>'
     )
 
@@ -448,9 +449,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
     # Comprobacion de actualizaciones al arrancar (en segundo plano, no bloquea).
     _cfg_inicial = cargar_config(config_path)
     if (_cfg_inicial.get("actualizaciones", {}) or {}).get("comprobar_al_arrancar", True):
-        threading.Thread(
-            target=_comprobar_actualizacion, args=(_cfg_inicial,), daemon=True
-        ).start()
+        threading.Thread(target=_comprobar_actualizacion, daemon=True).start()
 
     # ---------------------------------- menu ----------------------------------
 
@@ -1158,44 +1157,38 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             '<p class="meta">Los cambios se guardan en <code>config.usuario.yaml</code> '
             "(no tocan config.yaml); borra ese fichero para volver a los valores base.</p></div>"
         )
-        # --- Actualizaciones (Fase 11) ---
-        repo = (cfg.get("actualizaciones", {}) or {}).get("repo", "") or ""
+        # --- Actualizaciones (Fase 11): un solo boton, repo fijo, instala solo ---
         info = _ACTUALIZACION["estado"]
         if info:
             estado_upd = (
-                f'<p class="ok">✨ Nueva versión <b>{html.escape(info.version)}</b> disponible. '
-                f'<a class="btn mini" href="{html.escape(info.url_descarga)}" target="_blank">Descargar</a></p>'
+                f'<p class="ok">✨ Nueva versión <b>{html.escape(info.version)}</b> disponible.</p>'
             )
         elif _ACTUALIZACION["comprobado"]:
-            estado_upd = '<p class="meta">Estás en la última versión.</p>'
+            estado_upd = f'<p class="meta">Estás en la última versión (v{__version__}).</p>'
         else:
-            estado_upd = '<p class="meta">Aún no comprobado.</p>'
+            estado_upd = '<p class="meta">Pulsa el botón para comprobar si hay una versión nueva.</p>'
         cuerpo += (
             '<div class="card"><div class="franja">Actualizaciones de la aplicación</div>'
             f'<p class="meta">Versión instalada: <b>{__version__}</b></p>'
-            '<form method="post" action="/config/repo">'
-            "<label>Repositorio de GitHub para actualizaciones (usuario/repositorio)</label>"
-            f'<input name="repo" value="{html.escape(repo)}" placeholder="tuusuario/sazon-releases">'
-            '<div style="margin-top:10px"><button class="btn" type="submit">Guardar</button> '
-            '<button class="btn sec" formaction="/actualizaciones/comprobar" formmethod="post">'
-            "Buscar actualizaciones ahora</button></div></form>"
+            '<form method="post" action="/actualizaciones/comprobar">'
+            '<button class="btn" type="submit">Buscar actualización</button></form>'
             f"{estado_upd}"
-            '<p class="note">Las nuevas versiones se publican en GitHub Releases; aquí solo se '
-            "avisa y se enlaza la descarga (nunca se instala nada sin ti).</p></div>"
+            '<p class="note">Comprueba GitHub: si hay una versión nueva, la descarga e inicia el '
+            "instalador automáticamente; si ya estás al día, te lo indica.</p></div>"
         )
         return _pagina("Configuración", cuerpo)
 
-    @app.post("/config/repo")
-    async def config_repo(repo: str = Form("")):
-        guardar_overlay(config_path, {"actualizaciones": {"repo": repo.strip()}})
-        _ACTUALIZACION["comprobado"] = False
-        return RedirectResponse("/config?msg=Repositorio guardado.", status_code=303)
-
     @app.post("/actualizaciones/comprobar")
     def actualizaciones_comprobar():
-        cfg = cargar_config(config_path)
-        _comprobar_actualizacion(cfg)
-        return RedirectResponse("/config", status_code=303)
+        """Comprueba GitHub y, si hay version nueva, la descarga e instala."""
+        info = hay_actualizacion()
+        _ACTUALIZACION["estado"] = info
+        _ACTUALIZACION["comprobado"] = True
+        if info is None:
+            msg = f"Ya tienes la última versión de Sazón (v{__version__})."
+        else:
+            _ok, msg = instalar(info)
+        return RedirectResponse(f"/config?msg={quote(msg)}", status_code=303)
 
     @app.post("/config")
     async def config_save(request: Request):

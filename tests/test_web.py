@@ -49,10 +49,19 @@ def test_config_muestra_actualizaciones(client):
     assert "Versión instalada" in r.text
 
 
-def test_guardar_repo_actualizaciones(client, tmp_path):
-    r = client.post("/config/repo", data={"repo": "usuario/sazon-releases"}, follow_redirects=True)
+def test_actualizaciones_solo_boton(client, monkeypatch):
+    # La seccion de actualizaciones tiene SOLO el boton (sin campo de repo).
+    r = client.get("/config")
     assert r.status_code == 200
-    assert (tmp_path / "config.usuario.yaml").read_text(encoding="utf-8").find("sazon-releases") != -1
+    assert "Buscar actualización" in r.text
+    assert 'action="/actualizaciones/comprobar"' in r.text
+    assert 'name="repo"' not in r.text  # ya no hay campo que rellenar
+    # Al pulsar, si estamos al dia, avisa; si hay version, instala. Simulamos "al dia".
+    from menu_app import actualizaciones
+    monkeypatch.setattr("menu_app.web.app.hay_actualizacion", lambda *a, **k: None)
+    r2 = client.post("/actualizaciones/comprobar", follow_redirects=True)
+    assert r2.status_code == 200
+    assert "última versión" in r2.text
 
 
 def test_catalogo_page(client):
