@@ -37,6 +37,12 @@ _AYUDA_PLAYWRIGHT = (
 @click.option("--headless", is_flag=True, help="Sin ventana (no recomendado para el login).")
 @click.option("--limite", default=None, type=int, help="Prueba solo los primeros N productos.")
 @click.option(
+    "--paralelo",
+    default=8,
+    type=int,
+    help="Nº de productos anadiendose a la vez (0 = todos a la vez). Por defecto 8.",
+)
+@click.option(
     "--diagnostico",
     is_flag=True,
     help="Vuelca los botones del primer producto (para afinar los selectores de 'Anadir').",
@@ -67,6 +73,7 @@ def main(
     confirmar: bool,
     headless: bool,
     limite: int | None,
+    paralelo: int,
     diagnostico: bool,
     mantener_abierto: int,
     esperar_enter: bool,
@@ -104,6 +111,7 @@ def main(
         limite=limite, diagnostico=diagnostico,
         mantener_abierto_ms=max(0, mantener_abierto) * 1000,
         esperar_enter=esperar_enter,
+        paralelo=paralelo,
     )
 
     click.echo("")
