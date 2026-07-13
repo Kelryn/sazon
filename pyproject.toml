@@ -1,6 +1,6 @@
 [project]
 name = "menu-app"
-version = "0.4.0"
+version = "0.5.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,10 +24,12 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.32",
     "fpdf2>=2.8",
+    "pywebview>=5.0",      # ventana nativa de escritorio (WebView2/Edge en Windows)
+    "playwright>=1.45",    # navegador para el carrito de Alcampo (usa Chrome/Edge del sistema)
 ]
 
 [project.optional-dependencies]
-playwright = ["playwright>=1.45"]
+playwright = ["playwright>=1.45"]  # (retrocompat; ya es dependencia base)
 
 [project.scripts]
 menu-app-extraer-catalogo = "menu_app.ingesta.cli:main"
@@ -46,7 +48,8 @@ menu-app-clasificar-batchcooking = "menu_app.optimizacion.batchcooking_cli:main"
 menu-app-clasificar-platos = "menu_app.optimizacion.rol_plato_cli:main"
 menu-app-receta = "menu_app.recetas.manual_cli:main"
 menu-app-carrito = "menu_app.carrito.cli:main"
-menu-app-web = "menu_app.web.server:main"
+menu-app = "menu_app.escritorio:main"          # programa de escritorio (ventana nativa)
+menu-app-web = "menu_app.web.server:main"      # solo el servidor web (sin ventana)
 menu-app-config-clave = "menu_app.ia.config_clave_cli:main"
 
 [build-system]

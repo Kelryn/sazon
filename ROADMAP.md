@@ -251,6 +251,17 @@ recetas usen esa misma cebolla) → menos sobras, menos productos distintos y me
 | 11 | **Módulo de actualizaciones ✅** (NUEVO — petición usuario): `actualizaciones.py` (consulta GitHub Releases API, compara `version.py`), **banner** de nueva versión + sección en Configuración (repo + "Buscar actualizaciones"), workflow `.github/workflows/release.yml` (build `.exe` + Inno al pushear tag `v*`). **Publicado y verificado** contra `Kelryn/sazon` (repo real ya fijado en `config.yaml`). Ver G. |
 | 12 | **QA final** (NUEVO — petición usuario, FASE FINAL): probar TODOS los botones y funciones de la app. Ver H. |
 
+### M) Programa de escritorio (ventana nativa, sin terminal)  🚧 *(petición usuario)*
+La app dejaba impresión de "terminal que abre una web". Se convierte en un **programa con
+ventana propia**: `menu_app/escritorio.py` arranca el servidor FastAPI en un hilo y muestra
+la UI en una **ventana nativa con pywebview** (WebView2/Edge, ya en Windows 10/11). El `.exe`
+pasa a `console=False` (sin terminal) y entra por `escritorio.py`. El navegador externo solo
+se abre para el carrito. Se empaqueta **Playwright** en el `.exe` (usa Chrome/Edge del
+sistema, sin descargar Chromium) para que el carrito funcione en la app instalada — eso
+arregla el "Falta el navegador automatizado". Comando `menu-app` (escritorio); `menu-app-web`
+sigue sirviendo solo el servidor. **Verificado desde código fuente; pendiente validar el
+`.exe`** (pywebview+pythonnet+playwright en PyInstaller es delicado; se vigila el build de CI).
+
 ### K) Fase — Lluvia de ideas (100+ mejoras)  ✅ *(petición usuario — HECHA, pendiente de valorar)*
 Fase **antes de la QA final**: investigación a fondo de todas las partes de la app con un
 **mínimo de 100 mejoras** posibles, para valorarlas juntos y priorizar. **Realizada

@@ -17,8 +17,9 @@ datas, binaries, hiddenimports = [], [], []
 # Paquetes con carga dinamica de submodulos / ficheros de datos.
 # OJO 'pulp': incluye el BINARIO del solver CBC (cbc.exe) en pulp/solverdir; sin
 # collect_all no se empaqueta y "Generar menú" falla con PulpSolverError.
+# 'webview' (ventana nativa) y 'playwright' (carrito con Chrome/Edge del sistema).
 for paquete in ("uvicorn", "fastapi", "starlette", "recipe_scrapers", "fpdf",
-                "email_validator", "pulp"):
+                "email_validator", "pulp", "webview", "playwright"):
     try:
         d, b, h = collect_all(paquete)
         datas += d
@@ -31,8 +32,11 @@ for paquete in ("uvicorn", "fastapi", "starlette", "recipe_scrapers", "fpdf",
 hiddenimports += collect_submodules("uvicorn")
 hiddenimports += [
     "anyio", "h11", "click", "yaml", "rapidfuzz", "pulp", "bs4",
-    "menu_app.web.app",
+    "menu_app.web.app", "menu_app.escritorio",
+    # pywebview en Windows usa el backend EdgeChromium via pythonnet (clr).
+    "webview", "webview.platforms.winforms", "clr",
 ]
+hiddenimports += collect_submodules("webview")
 
 # Recursos: config base y catalogo (si existe en el arbol de construccion).
 raiz = Path(".").resolve()
@@ -41,7 +45,7 @@ if (raiz / "data" / "menu.db").exists():
     datas += [("data/menu.db", "data")]
 
 a = Analysis(
-    ["src/menu_app/lanzador.py"],
+    ["src/menu_app/escritorio.py"],  # programa de escritorio (ventana nativa)
     pathex=["src"],
     binaries=binaries,
     datas=datas,
@@ -67,7 +71,7 @@ exe = EXE(
     strip=False,
     upx=True,
     runtime_tmpdir=None,
-    console=True,  # ventana de consola: sirve de "log" y para cerrar la app
+    console=False,  # SIN consola: Sazon es un programa con ventana propia (no terminal)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
