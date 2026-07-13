@@ -71,14 +71,23 @@ _SEL_INCREMENTO = (
     'button[aria-label*="más" i]',
     'button:has-text("+")',
 )
-# Senales de sesion iniciada (si aparece cualquiera, damos por logueado).
+# Senales de sesion iniciada / listo para comprar (si aparece cualquiera, seguimos).
+# Best-effort: Alcampo (OSP) cambia el DOM; por eso hay varias y el flujo continua
+# igualmente en dry-run aunque ninguna case.
 _SEL_LOGUEADO = (
     'a[href*="logout"]',
     'a[href*="cerrar-sesion"]',
+    'a[href*="/account"]',
+    'a[href*="mi-cuenta"]',
     '[data-testid*="account" i]',
+    '[data-testid*="trolley" i]',
+    '[data-testid*="basket" i]',
     'button[aria-label*="cuenta" i]',
+    'button[aria-label*="cesta" i]',
+    'a[aria-label*="cesta" i]',
     'text=/mis pedidos/i',
     'text=/cerrar sesión/i',
+    'text=/hola,/i',
 )
 
 
@@ -178,6 +187,27 @@ def _esta_logueado(page: Any) -> bool:
     return sel is not None
 
 
+def _esperar_login(page: Any, espera_login_ms: int, log: Callable[[str], None]) -> bool:
+    """Sondea si el usuario ha iniciado sesion, TOLERANDO navegaciones y recargas
+    (al hacer login la SPA recarga y destruye el contexto de ejecucion, lo que hacia
+    fallar a wait_for_selector). Nunca lanza: devuelve True si detecta sesion, o False
+    si se agota el tiempo o la ventana se cierra."""
+    paso = 3000
+    transcurrido = 0
+    while transcurrido < espera_login_ms:
+        try:
+            if _esta_logueado(page):
+                return True
+        except Exception:  # noqa: BLE001 - la pagina puede estar navegando; reintenta
+            pass
+        try:
+            page.wait_for_timeout(paso)
+        except Exception:  # noqa: BLE001 - ventana cerrada u otro problema: salimos
+            return False
+        transcurrido += paso
+    return False
+
+
 # JS que vuelca los botones VISIBLES de la ficha con sus atributos: sirve para
 # identificar el control real de "Anadir"/"+" cuando los selectores no casan.
 _JS_BOTONES = """
@@ -248,7 +278,6 @@ def anadir_al_carrito(
     - `headless=False`: ventana visible (necesaria para el login manual la 1a vez).
     - `espera_login_ms`: cuanto espera a que el usuario inicie sesion si aun no lo esta.
     """
-    from playwright.sync_api import TimeoutError as PWTimeout  # noqa: N814
     from playwright.sync_api import sync_playwright
 
     items = _normalizar_lineas(lineas)
@@ -286,21 +315,19 @@ def anadir_al_carrito(
             else:
                 log(
                     "No hay sesion iniciada. Inicia sesion TU en la ventana de Alcampo "
-                    f"(esperando hasta {espera_login_ms // 1000}s)..."
+                    f"y pon tu codigo postal; continuo en cuanto lo detecte (hasta "
+                    f"{espera_login_ms // 1000}s)..."
                 )
-                try:
-                    page.wait_for_selector(
-                        ", ".join(_SEL_LOGUEADO), timeout=espera_login_ms
-                    )
-                    res.logueado = True
+                res.logueado = _esperar_login(page, espera_login_ms, log)
+                if res.logueado:
                     log("Sesion detectada. Continuo.")
-                except PWTimeout:
-                    # Para ANADIR de verdad exigimos sesion; en dry-run/diagnostico se
-                    # continua best-effort (el volcado de botones sirve igual, y quiza
-                    # el usuario si esta logueado aunque no casen los selectores).
-                    if not dry_run:
-                        log("No se detecto sesion a tiempo. Aborto sin tocar el carrito.")
-                        return res
+                elif not dry_run:
+                    # Para ANADIR de verdad exigimos sesion.
+                    log("No se detecto sesion. Aborto sin tocar el carrito.")
+                    return res
+                else:
+                    # En dry-run/diagnostico se continua best-effort: el volcado de
+                    # botones sirve igual aunque no casen los selectores de login.
                     log("No detecte la sesion, pero sigo en dry-run (best-effort).")
 
             # 2) Por cada linea: abrir ficha y anadir (o comprobar en dry-run).
