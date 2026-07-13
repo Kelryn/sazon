@@ -40,6 +40,15 @@ _USER_AGENT = (
 # Reduce la huella de automatizacion (navigator.webdriver, etc.).
 _ARGS_NAVEGADOR = ("--disable-blink-features=AutomationControlled",)
 
+# Navegadores a probar, en orden: primero el Chrome/Edge YA instalado del usuario
+# (mas fiable en modo ventana que el Chromium empaquetado, que en algunas maquinas
+# Windows da "spawn UNKNOWN"/timeout al abrir con ventana); None = Chromium de
+# Playwright como ultimo recurso.
+_CANALES = ("chrome", "msedge", None)
+# El primer arranque con ventana puede tardar (antivirus escaneando el .exe): damos
+# margen amplio al lanzamiento para no fallar por timeout (30s por defecto).
+_TIMEOUT_LANZAMIENTO_MS = 120_000
+
 # Fragmentos de URL de las peticiones del carrito de la plataforma OSP (Ocado).
 # Se vigilan para capturar la forma de la API (Via 1) sin reconstruirla a mano.
 _FRAGMENTOS_CARRITO = ("/trolley", "/basket", "/cart")
@@ -88,6 +97,8 @@ class ResultadoCarrito:
     logueado: bool = False
     lineas: list[ResultadoLinea] = field(default_factory=list)
     endpoints_carrito: list[dict[str, Any]] = field(default_factory=list)
+    # Diagnostico: botones visibles del primer producto (para afinar selectores).
+    botones_diagnostico: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -105,6 +116,36 @@ def playwright_disponible() -> bool:
     except Exception:  # noqa: BLE001
         return False
     return True
+
+
+def _lanzar_contexto(p: Any, user_dir: Path, headless: bool, log: Callable[[str], None]):
+    """Lanza un contexto persistente probando Chrome, Edge y por ultimo el Chromium
+    empaquetado. Devuelve el contexto o lanza el ultimo error con un mensaje claro."""
+    errores: list[str] = []
+    for canal in _CANALES:
+        opciones: dict[str, Any] = dict(
+            user_data_dir=str(user_dir),
+            headless=headless,
+            locale="es-ES",
+            user_agent=_USER_AGENT,
+            viewport={"width": 1280, "height": 900},
+            args=list(_ARGS_NAVEGADOR),
+            timeout=_TIMEOUT_LANZAMIENTO_MS,
+        )
+        if canal:
+            opciones["channel"] = canal
+        try:
+            ctx = p.chromium.launch_persistent_context(**opciones)
+            log(f"Navegador: {canal or 'chromium (Playwright)'}.")
+            return ctx
+        except Exception as e:  # noqa: BLE001 - probamos el siguiente navegador
+            nombre = canal or "chromium"
+            errores.append(f"{nombre}: {str(e).splitlines()[0][:120]}")
+            log(f"No pude abrir {nombre}, pruebo el siguiente...")
+    raise RuntimeError(
+        "No se pudo abrir ningun navegador (Chrome/Edge/Chromium). Detalles:\n  - "
+        + "\n  - ".join(errores)
+    )
 
 
 def _dir_navegador() -> Path:
@@ -135,6 +176,30 @@ def _primero_visible(page: Any, selectores: Iterable[str]):
 def _esta_logueado(page: Any) -> bool:
     sel, _ = _primero_visible(page, _SEL_LOGUEADO)
     return sel is not None
+
+
+# JS que vuelca los botones VISIBLES de la ficha con sus atributos: sirve para
+# identificar el control real de "Anadir"/"+" cuando los selectores no casan.
+_JS_BOTONES = """
+() => Array.from(document.querySelectorAll('button, [role=button], a[href*="trolley"]'))
+  .filter(el => el.offsetParent !== null)
+  .slice(0, 60)
+  .map(el => ({
+    tag: el.tagName.toLowerCase(),
+    text: (el.innerText || '').trim().slice(0, 40),
+    aria: el.getAttribute('aria-label') || '',
+    testid: el.getAttribute('data-testid') || '',
+    cls: (el.className || '').toString().slice(0, 60),
+  }))
+"""
+
+
+def diagnostico_botones(page: Any) -> list[dict[str, str]]:
+    """Lista los botones visibles de la pagina actual (para afinar selectores)."""
+    try:
+        return page.evaluate(_JS_BOTONES) or []
+    except Exception:  # noqa: BLE001
+        return []
 
 
 @dataclass
@@ -171,6 +236,8 @@ def anadir_al_carrito(
     headless: bool = False,
     timeout_ms: int = 30_000,
     espera_login_ms: int = 180_000,
+    limite: int | None = None,
+    diagnostico: bool = False,
     log: Callable[[str], None] = print,
 ) -> ResultadoCarrito:
     """Abre Alcampo con sesion persistente y anade (o comprueba, en dry-run) la compra.
@@ -185,6 +252,8 @@ def anadir_al_carrito(
     from playwright.sync_api import sync_playwright
 
     items = _normalizar_lineas(lineas)
+    if limite is not None and limite > 0:
+        items = items[:limite]
     res = ResultadoCarrito(dry_run=dry_run)
     if not items:
         log("No hay lineas de compra que anadir.")
@@ -192,14 +261,7 @@ def anadir_al_carrito(
 
     user_dir = _dir_navegador()
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            user_data_dir=str(user_dir),
-            headless=headless,
-            locale="es-ES",
-            user_agent=_USER_AGENT,
-            viewport={"width": 1280, "height": 900},
-            args=list(_ARGS_NAVEGADOR),
-        )
+        ctx = _lanzar_contexto(p, user_dir, headless, log)
         try:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
@@ -233,11 +295,25 @@ def anadir_al_carrito(
                     res.logueado = True
                     log("Sesion detectada. Continuo.")
                 except PWTimeout:
-                    log("No se detecto sesion a tiempo. Aborto sin tocar el carrito.")
-                    return res
+                    # Para ANADIR de verdad exigimos sesion; en dry-run/diagnostico se
+                    # continua best-effort (el volcado de botones sirve igual, y quiza
+                    # el usuario si esta logueado aunque no casen los selectores).
+                    if not dry_run:
+                        log("No se detecto sesion a tiempo. Aborto sin tocar el carrito.")
+                        return res
+                    log("No detecte la sesion, pero sigo en dry-run (best-effort).")
 
             # 2) Por cada linea: abrir ficha y anadir (o comprobar en dry-run).
-            for it in items:
+            for idx, it in enumerate(items):
+                if diagnostico and idx == 0:
+                    url = _url_producto(it.producto_id, it.url)
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                        page.wait_for_timeout(1500)  # deja que la SPA pinte los botones
+                        res.botones_diagnostico = diagnostico_botones(page)
+                        log(f"Diagnostico: {len(res.botones_diagnostico)} botones visibles en {it.nombre}")
+                    except Exception as e:  # noqa: BLE001
+                        log(f"Diagnostico fallido: {e}")
                 res.lineas.append(
                     _procesar_linea(page, it, dry_run=dry_run, timeout_ms=timeout_ms, log=log)
                 )

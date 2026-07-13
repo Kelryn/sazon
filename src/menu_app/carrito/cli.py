@@ -35,6 +35,12 @@ _AYUDA_PLAYWRIGHT = (
     help="ANADE de verdad al carrito. Sin este flag va en dry-run (solo comprueba).",
 )
 @click.option("--headless", is_flag=True, help="Sin ventana (no recomendado para el login).")
+@click.option("--limite", default=None, type=int, help="Prueba solo los primeros N productos.")
+@click.option(
+    "--diagnostico",
+    is_flag=True,
+    help="Vuelca los botones del primer producto (para afinar los selectores de 'Anadir').",
+)
 @click.option(
     "--reporte",
     "reporte_path",
@@ -48,6 +54,8 @@ def main(
     plan_id: str | None,
     confirmar: bool,
     headless: bool,
+    limite: int | None,
+    diagnostico: bool,
     reporte_path: Path | None,
 ) -> None:
     """Anade la compra del plan al carrito de compraonline.alcampo.es (prototipo)."""
@@ -77,7 +85,10 @@ def main(
     else:
         click.echo("DRY-RUN: solo compruebo que cada ficha tiene boton de anadir (no toco el carrito).")
 
-    res = anadir_al_carrito(compra.lineas, dry_run=not confirmar, headless=headless)
+    res = anadir_al_carrito(
+        compra.lineas, dry_run=not confirmar, headless=headless,
+        limite=limite, diagnostico=diagnostico,
+    )
 
     click.echo("")
     click.echo(
@@ -88,6 +99,15 @@ def main(
     if res.endpoints_carrito:
         ej = res.endpoints_carrito[0]
         click.echo(f"  Ejemplo de endpoint del carrito (Via 1 futura): {ej['metodo']} {ej['url']}")
+    if res.botones_diagnostico:
+        click.echo("\nBotones visibles del primer producto (para afinar selectores):")
+        for b in res.botones_diagnostico:
+            etiqueta = b.get("text") or b.get("aria") or "(sin texto)"
+            click.echo(
+                f"  - <{b['tag']}> '{etiqueta}'"
+                + (f" aria='{b['aria']}'" if b.get("aria") else "")
+                + (f" data-testid='{b['testid']}'" if b.get("testid") else "")
+            )
 
     if reporte_path is not None:
         datos = {
