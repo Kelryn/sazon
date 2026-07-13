@@ -24,11 +24,15 @@ Requiere el extra opcional `playwright`:
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 BASE_URL = "https://www.compraonline.alcampo.es"
+# Pagina de inicio de sesion (OSP). Si la ruta cambiara, el flujo cae a abrir el
+# login desde la home pulsando el boton de cuenta.
+LOGIN_URL = f"{BASE_URL}/login"
 
 # UA de Chrome real (sin sufijo de bot): en el flujo del carrito queremos parecer
 # el navegador del propio usuario. El anti-bot (CloudFront/Akamai) bloquea headless
@@ -72,6 +76,21 @@ _SEL_INCREMENTO = (
     'button[aria-label*="más" i]',
     'button:has-text("+")',
 )
+# Disparadores para ABRIR el formulario de login desde la home (si la URL directa
+# no muestra ya el formulario).
+_SEL_ABRIR_LOGIN = (
+    'a[href*="login" i]',
+    'a[href*="identif" i]',
+    'button:has-text("Iniciar sesión")',
+    'a:has-text("Iniciar sesión")',
+    'button:has-text("Identifícate")',
+    'a:has-text("Identifícate")',
+    'button:has-text("Mi cuenta")',
+    'button[aria-label*="cuenta" i]',
+)
+# Campo de contrasena: si esta visible, ya estamos en la pantalla de login.
+_SEL_CAMPO_PASSWORD = 'input[type="password"]'
+
 # Senales de sesion iniciada / listo para comprar (si aparece cualquiera, seguimos).
 # Best-effort: Alcampo (OSP) cambia el DOM; por eso hay varias y el flujo continua
 # igualmente en dry-run aunque ninguna case.
@@ -202,6 +221,39 @@ def _esta_logueado(page: Any) -> bool:
     return sel is not None
 
 
+def _ir_a_login(page: Any, timeout_ms: int, log: Callable[[str], None]) -> None:
+    """Deja al usuario en la pantalla de inicio de sesion: prueba la URL directa y,
+    si no aparece el campo de contrasena, abre el login desde la home."""
+    try:
+        page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=timeout_ms)
+    except Exception:  # noqa: BLE001
+        try:
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception:  # noqa: BLE001
+            return
+    page.wait_for_timeout(1200)
+    # Si ya se ve el campo de contrasena o ya hay sesion, no hay nada mas que hacer.
+    try:
+        if page.locator(_SEL_CAMPO_PASSWORD).first.is_visible() or _esta_logueado(page):
+            return
+    except Exception:  # noqa: BLE001
+        pass
+    # Si no, intenta abrir el formulario desde la home.
+    if page.url.rstrip("/") != LOGIN_URL:
+        try:
+            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=timeout_ms)
+            page.wait_for_timeout(800)
+        except Exception:  # noqa: BLE001
+            pass
+    _sel, boton = _primero_visible(page, _SEL_ABRIR_LOGIN)
+    if boton is not None:
+        try:
+            boton.click(timeout=timeout_ms)
+            log("Abriendo el formulario de inicio de sesion...")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def _esperar_login(page: Any, espera_login_ms: int, log: Callable[[str], None]) -> bool:
     """Sondea si el usuario ha iniciado sesion, TOLERANDO navegaciones y recargas
     (al hacer login la SPA recarga y destruye el contexto de ejecucion, lo que hacia
@@ -284,6 +336,7 @@ def anadir_al_carrito(
     limite: int | None = None,
     diagnostico: bool = False,
     mantener_abierto_ms: int = 0,
+    esperar_enter: bool = True,
     log: Callable[[str], None] = print,
 ) -> ResultadoCarrito:
     """Abre Alcampo con sesion persistente y anade (o comprueba, en dry-run) la compra.
@@ -324,27 +377,28 @@ def anadir_al_carrito(
 
             page.on("request", _on_request)
 
-            # 1) Sesion. La abre el usuario a mano (nunca guardamos la contrasena).
-            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=timeout_ms)
+            # 1) Sesion. La inicia el usuario a mano (nunca guardamos la contrasena).
+            # Le llevamos directo al formulario de login para que no tenga que buscarlo.
+            _ir_a_login(page, timeout_ms, log)
             if _esta_logueado(page):
                 res.logueado = True
+                log("Ya habia sesion iniciada. Continuo.")
+            elif esperar_enter and sys.stdin is not None and sys.stdin.isatty():
+                # Lo mas FIABLE: el propio usuario confirma cuando ha terminado, en vez
+                # de adivinar por el DOM (que cambia y daba falsos positivos/negativos).
+                log("Inicia sesion en la ventana y pon tu codigo postal de entrega.")
+                try:
+                    input(">>> Cuando hayas iniciado sesion, pulsa ENTER aqui para continuar... ")
+                except EOFError:
+                    pass
+                res.logueado = True  # confiamos en la confirmacion del usuario
             else:
-                log(
-                    "No hay sesion iniciada. Inicia sesion TU en la ventana de Alcampo "
-                    f"y pon tu codigo postal; continuo en cuanto lo detecte (hasta "
-                    f"{espera_login_ms // 1000}s)..."
-                )
+                # Sin terminal interactiva (p.ej. lanzado desde la web): auto-deteccion.
+                log(f"Inicia sesion en la ventana (esperando hasta {espera_login_ms // 1000}s)...")
                 res.logueado = _esperar_login(page, espera_login_ms, log)
-                if res.logueado:
-                    log("Sesion detectada. Continuo.")
-                elif not dry_run:
-                    # Para ANADIR de verdad exigimos sesion.
+                if not res.logueado and not dry_run:
                     log("No se detecto sesion. Aborto sin tocar el carrito.")
                     return res
-                else:
-                    # En dry-run/diagnostico se continua best-effort: el volcado de
-                    # botones sirve igual aunque no casen los selectores de login.
-                    log("No detecte la sesion, pero sigo en dry-run (best-effort).")
 
             # 2) Por cada linea: abrir ficha y anadir (o comprobar en dry-run).
             for idx, it in enumerate(items):
