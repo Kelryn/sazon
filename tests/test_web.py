@@ -64,6 +64,12 @@ def test_actualizaciones_solo_boton(client, monkeypatch):
     assert "última versión" in r2.text
 
 
+def test_carrito_enviar_sin_plan_no_rompe(client):
+    # Sin plan, la ruta redirige a /compra con un mensaje y NO abre navegador.
+    r = client.post("/carrito/enviar", follow_redirects=True)
+    assert r.status_code == 200
+
+
 def test_catalogo_page(client):
     r = client.get("/catalogo")
     assert r.status_code == 200

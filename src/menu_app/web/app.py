@@ -26,6 +26,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from ..actualizaciones import hay_actualizacion, instalar
+from ..carrito import anadir_al_carrito, playwright_disponible
 from ..almacenamiento.actualizar import actualizar_catalogo
 from ..almacenamiento.db import get_connection, init_db
 from ..version import __version__
@@ -155,6 +156,9 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
 
 _CATALOGO = {"activa": False, "log": deque(maxlen=300), "resumen": ""}
 
+# Estado del envio de la compra al carrito de Alcampo (en 2º plano).
+_CARRITO = {"activa": False, "log": deque(maxlen=400), "resumen": ""}
+
 # Estado de la comprobacion de actualizaciones (Fase 11): None = sin comprobar,
 # False = comprobado y al dia, InfoActualizacion = hay version nueva.
 _ACTUALIZACION = {"estado": None, "comprobado": False}
@@ -205,6 +209,46 @@ def _lanzar_actualizacion(cfg: dict, categorias: list[str] | None = None) -> boo
 
     threading.Thread(target=_correr, daemon=True).start()
     return True
+
+
+def _lanzar_carrito(config_path) -> tuple[bool, str]:
+    """Envia la compra del plan al carrito de Alcampo en 2º plano (abre el navegador)."""
+    if _CARRITO["activa"]:
+        return False, "Ya hay un envío en marcha."
+    if not playwright_disponible():
+        return False, (
+            "Falta el navegador automatizado. Instálalo una vez: "
+            "uv sync --extra playwright && uv run playwright install chromium"
+        )
+    cfg = cargar_config(config_path)
+    db = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+    conn = get_connection(db)
+    init_db(conn)
+    compra = lista_compra(conn, despensa=cfg.get("despensa"))
+    conn.close()
+    if not compra.lineas:
+        return False, "El plan no tiene lista de la compra (genera antes un menú)."
+
+    _CARRITO["activa"] = True
+    _CARRITO["log"].clear()
+    _CARRITO["resumen"] = ""
+    lineas = list(compra.lineas)
+
+    def _correr():
+        try:
+            res = anadir_al_carrito(lineas, dry_run=False, headless=False, log=_CARRITO["log"].append)
+            _CARRITO["resumen"] = (
+                f"Enviados {res.n_ok}/{len(res.lineas)} productos al carrito. "
+                f"Total de la cesta: {res.total_cesta or '—'}."
+            )
+        except Exception as e:  # noqa: BLE001 - se muestra al usuario
+            _CARRITO["log"].append(f"ERROR: {e}")
+            _CARRITO["resumen"] = f"Falló el envío: {e}"
+        finally:
+            _CARRITO["activa"] = False
+
+    threading.Thread(target=_correr, daemon=True).start()
+    return True, "Enviando la compra a Alcampo. Inicia sesión en la ventana que se abre."
 
 
 # ------------------------------- render del menu -------------------------------
@@ -672,7 +716,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
     # ------------------------------ lista de la compra ------------------------------
 
     @app.get("/compra", response_class=HTMLResponse)
-    def compra_page():
+    def compra_page(msg: str = ""):
         conn, cfg = _conn()
         try:
             compra = lista_compra(conn, despensa=cfg.get('despensa'))
@@ -728,14 +772,45 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             '<a class="btn sec" href="/menu.pdf">📄 Menú (PDF)</a> '
             '<a class="btn sec" href="/menu.csv">📊 Menú (CSV)</a></div>'
         )
+        # --- Enviar al carrito de Alcampo (en 2º plano) ---
+        activa = _CARRITO["activa"]
+        if activa:
+            accion = '<p class="ok">⏳ Envío en marcha… inicia sesión en la ventana de Alcampo.</p>'
+        else:
+            accion = (
+                '<form method="post" action="/carrito/enviar">'
+                '<button class="btn" type="submit">🛒 Enviar la compra al carrito de Alcampo</button>'
+                "</form>"
+            )
+        if _CARRITO["resumen"]:
+            accion += f'<p class="ok">{html.escape(_CARRITO["resumen"])}</p>'
+        log_txt = "\n".join(list(_CARRITO["log"])[-40:])
+        log_html = f'<pre class="log">{html.escape(log_txt)}</pre>' if log_txt else ""
+        carrito_card = (
+            '<div class="card"><div class="franja">🛒 Enviar al carrito de Alcampo</div>'
+            + accion
+            + log_html
+            + '<p class="note">Abre Alcampo en tu navegador, inicias sesión TÚ (la app nunca '
+            "guarda tu contraseña) y añade automáticamente todos los productos a tu cesta, en "
+            "paralelo. Al terminar te deja en la cesta para elegir franja y pagar. Salta los "
+            "productos agotados.</p></div>"
+        )
+        aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
         cuerpo = (
-            descargas
+            aviso
+            + descargas
+            + carrito_card
             + f'<div class="card">{ticket}{sin}'
             f'<p class="meta">Agrupada por pasillo. Cada producto enlaza a su página en '
             f"compraonline.alcampo.es para añadirlo al carrito. Las unidades se calculan según "
             f"el formato del paquete.</p></div>"
         )
-        return _pagina("Lista de la compra", cuerpo)
+        return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None)
+
+    @app.post("/carrito/enviar")
+    def carrito_enviar():
+        _ok, msg = _lanzar_carrito(config_path)
+        return RedirectResponse(f"/compra?msg={quote(msg)}", status_code=303)
 
     @app.get("/compra.csv")
     def compra_csv():
