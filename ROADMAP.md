@@ -251,7 +251,16 @@ recetas usen esa misma cebolla) → menos sobras, menos productos distintos y me
 | 11 | **Módulo de actualizaciones ✅** (NUEVO — petición usuario): `actualizaciones.py` (consulta GitHub Releases API, compara `version.py`), **banner** de nueva versión + sección en Configuración (repo + "Buscar actualizaciones"), workflow `.github/workflows/release.yml` (build `.exe` + Inno al pushear tag `v*`). **Publicado y verificado** contra `Kelryn/sazon` (repo real ya fijado en `config.yaml`). Ver G. |
 | 12 | **QA final** (NUEVO — petición usuario, FASE FINAL): probar TODOS los botones y funciones de la app. Ver H. |
 
-### H) Fase 12 — QA final (probar todos los botones y funciones)  *(NUEVO — petición usuario)*
+### K) Fase — Lluvia de ideas (100+ mejoras)  ✅ *(petición usuario — HECHA, pendiente de valorar)*
+Fase **antes de la QA final**: investigación a fondo de todas las partes de la app con un
+**mínimo de 100 mejoras** posibles, para valorarlas juntos y priorizar. **Realizada
+(2026-07-12): ver [MEJORAS.md](MEJORAS.md) — 120 mejoras** en 12 áreas (nutrición, matching,
+solver, recetas, carrito, UI/UX, distribución, rendimiento, testing, IA opcional,
+sostenibilidad, datos Alcampo). **Siguiente paso: priorizarlas con el usuario** (impacto ×
+esfuerzo × riesgo, manteniendo el principio determinista) y meter las elegidas en el ROADMAP
+como fases nuevas antes de la QA final.
+
+### H) Fase final — QA (probar todos los botones y funciones)  *(NUEVO — petición usuario)*
 Antes de cada release, verificar que **cada botón, enlace y acción funciona**. Se ejecuta
 sobre la app en marcha (`Sazon.exe` o `menu-app-web`), comprobando que cada ruta responde y
 que cada acción tiene el efecto esperado, además de la suite de tests automáticos.
