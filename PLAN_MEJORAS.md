@@ -61,5 +61,19 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ⬜ **113** Presupuesto por comensal · **114** compartir menús · **115** despensa básica.
 - ⬜ **116** Catálogo programado · **117** re-match descatalogados · **118** avisar subidas · **119** cobertura fibra · **120** validación de datos.
 
+## Lote 11 — Rediseño completo GUIADO por el usuario (v0.15.0) *(petición usuario)*
+Rediseño **integral** de la interfaz, dirigido por el usuario: se le preguntará
+**sección por sección** (menú, lista de la compra, recetas, catálogo, configuración,
+carrito, detalle de receta) y **elemento por elemento** (cada botón, columna, bloque,
+tarjeta, tabla, cabecera, formulario…) qué quiere y cómo lo quiere. Metodología:
+- ⬜ Inventario de TODAS las pantallas y sus elementos (checklist para no dejarse nada).
+- ⬜ Entrevista guiada por secciones: yo pregunto, el usuario da ideas (estilo, colores,
+  disposición, textos, comportamiento) de cada bloque/botón/columna.
+- ⬜ Mockups/propuestas por sección para validar antes de implementar.
+- ⬜ Implementación respetando "sin CDN" (todo embebido) para que siga empaquetando a `.exe`.
+- ⬜ Revisión final y guía de estilo actualizada.
+Depende de decisiones del usuario (no se puede hacer en autónomo). Idealmente después
+del Lote 7 (interfaz) o cuando el usuario quiera abrir la entrevista.
+
 ---
 Al terminar todos los lotes → **QA final** (fase última del ROADMAP).
