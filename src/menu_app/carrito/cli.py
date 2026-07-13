@@ -107,12 +107,19 @@ def main(
     )
 
     click.echo("")
+    agotados = [l for l in res.lineas if l.detalle == "agotado"]
+    fallidos = [l for l in res.lineas if not l.ok and l.detalle != "agotado"]
     click.echo(
         f"Sesion iniciada: {'si' if res.logueado else 'no'} | "
         f"lineas OK: {res.n_ok}/{len(res.lineas)} | "
+        f"agotados: {len(agotados)} | fallidos: {len(fallidos)} | "
         f"endpoints de carrito capturados: {len(res.endpoints_carrito)}"
         + (f" | total cesta: {res.total_cesta}" if res.total_cesta else "")
     )
+    if agotados:
+        click.echo("Agotados (no disponibles en Alcampo): " + ", ".join(l.nombre for l in agotados))
+    if fallidos:
+        click.echo("Fallidos: " + "; ".join(f"{l.nombre} ({l.detalle})" for l in fallidos))
     if res.endpoints_carrito:
         ej = res.endpoints_carrito[0]
         click.echo(f"  Ejemplo de endpoint del carrito (Via 1 futura): {ej['metodo']} {ej['url']}")

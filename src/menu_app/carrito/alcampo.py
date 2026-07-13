@@ -62,11 +62,18 @@ _FRAGMENTOS_CARRITO = ("/trolley", "/basket", "/cart")
 # tiene MUCHOS botones "Añadir" (carrusel de productos recomendados), por eso lo
 # ideal es apuntar por el NOMBRE del producto (ver _localizar_anadir); estos son el
 # respaldo generico. El principal suele ser el primero del DOM.
+# El boton de anadir lleva data-synthetics="add-button" (estable, independiente del
+# idioma; confirmado en vivo). El respaldo va por aria-label.
 _SEL_ANADIR = (
+    'button[data-synthetics="add-button"]',
     'button[aria-label^="Añadir"][aria-label*="al carrito" i]',
     'button[aria-label*="Añadir" i][aria-label*="carrito" i]',
-    'button[aria-label*="Añadir" i]',
     'button:has-text("Añadir")',
+)
+# Bases para _localizar_anadir, en orden de preferencia.
+_BASES_ANADIR = (
+    'button[data-synthetics="add-button"]',
+    'button[aria-label^="Añadir"][aria-label*="al carrito"]',
 )
 # "+" para subir cantidad tras anadir (confirmado en vivo): el aria-label real es
 # "Aumentar la cantidad de {nombre} en el carrito".
@@ -212,28 +219,29 @@ def _localizar_anadir(page: Any, nombre: str):
     tambien lleva el nombre ('Diapositiva ... {nombre}'), por eso exigimos que el
     aria-label EMPIECE por 'Añadir' (descarta la imagen); entre los que quedan (el
     principal + carrusel de recomendados) se elige el que contiene el NOMBRE."""
-    try:
-        botones = page.locator('button[aria-label^="Añadir"][aria-label*="al carrito"]')
-        total = botones.count()
-        nucleo = _norm(nombre)
-        primero = None
-        for i in range(min(total, 40)):
-            b = botones.nth(i)
-            try:
-                if not b.is_visible():
+    nucleo = _norm(nombre)
+    for base in _BASES_ANADIR:
+        try:
+            botones = page.locator(base)
+            total = botones.count()
+            primero = None
+            for i in range(min(total, 60)):
+                b = botones.nth(i)
+                try:
+                    if not b.is_visible():
+                        continue
+                    al = _norm(b.get_attribute("aria-label") or "")
+                except Exception:  # noqa: BLE001
                     continue
-                al = _norm(b.get_attribute("aria-label") or "")
-            except Exception:  # noqa: BLE001
-                continue
-            if nucleo and nucleo in al:
-                return "aria-nombre", b
-            if primero is None:
-                primero = b
-        if primero is not None:
-            return "aria-primero", primero
-    except Exception:  # noqa: BLE001
-        pass
-    return _primero_visible(page, _SEL_ANADIR)
+                if nucleo and nucleo in al:
+                    return base, b  # el del producto principal
+                if primero is None:
+                    primero = b
+            if primero is not None:
+                return base, primero
+        except Exception:  # noqa: BLE001
+            continue
+    return None, None
 
 
 def _localizar_incremento(page: Any, nombre: str):
@@ -581,6 +589,20 @@ def _procesar_linea(
         return ResultadoLinea(
             it.producto_id, it.nombre, it.unidades, False, "sin boton de anadir"
         )
+
+    # ¿Producto AGOTADO / boton deshabilitado? (aria-disabled o texto "Agotado").
+    # Sin esta comprobacion, click() esperaria 30s a que se habilite y daria timeout.
+    try:
+        agotado = (
+            boton.get_attribute("aria-disabled") == "true"
+            or "agotado" in _norm(boton.inner_text() or "")
+            or not boton.is_enabled()
+        )
+    except Exception:  # noqa: BLE001
+        agotado = False
+    if agotado:
+        log(f"  ⊘ {etiqueta}: AGOTADO / no disponible en Alcampo")
+        return ResultadoLinea(it.producto_id, it.nombre, it.unidades, False, "agotado")
 
     if dry_run:
         log(f"  ✓ {etiqueta}: boton de anadir OK [{sel}] (dry-run, no se anade)")
