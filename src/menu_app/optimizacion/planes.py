@@ -31,6 +31,7 @@ def _serializar(res: ResultadoMenu, batchcooking: bool = False) -> str:
             "es_batchcooking": res.recetas[rid].es_batchcooking,
             "grupo": res.recetas[rid].grupo,
             "por_que": por_que_receta(res.recetas[rid]),  # explicabilidad (#35)
+            "nutri": res.recetas[rid].nutri,  # Nutri-Score A-E (#2)
         }
         for rid in usadas
         if rid in res.recetas

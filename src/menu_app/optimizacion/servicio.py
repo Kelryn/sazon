@@ -19,6 +19,7 @@ from .nutrientes import (
     BandaNutriente,
     ConfigNutricion,
     escalar_bandas,
+    nutri_score,
     objetivos_semanales,
 )
 from .palatabilidad import palatabilidad_bayesiana
@@ -133,12 +134,53 @@ def por_que_receta(r: RecetaOpt) -> str:
     return " · ".join(razones)
 
 
+# Factores de actividad (TDEE = BMR x factor) y de objetivo (ajuste calorico).
+_FACTOR_ACTIVIDAD = {
+    "sedentario": 1.2, "ligero": 1.375, "moderado": 1.55, "activo": 1.725, "muy_activo": 1.9,
+}
+_FACTOR_OBJETIVO = {"perder": 0.80, "mantener": 1.0, "ganar": 1.10}
+
+
+def kcal_desde_perfil(perfil: dict) -> float | None:
+    """kcal/dia objetivo desde peso/altura/edad/sexo/actividad/objetivo (#4/#5).
+
+    BMR por Mifflin-St Jeor; TDEE = BMR x factor de actividad; ajuste por objetivo
+    (perder -20% / mantener / ganar +10%). Devuelve None si faltan datos clave."""
+    try:
+        peso = float(perfil.get("peso_kg") or 0)
+        altura = float(perfil.get("altura_cm") or 0)
+        edad = float(perfil.get("edad") or 0)
+    except (TypeError, ValueError):
+        return None
+    if peso <= 0 or altura <= 0 or edad <= 0:
+        return None
+    sexo = str(perfil.get("sexo", "h")).lower()[:1]
+    bmr = 10 * peso + 6.25 * altura - 5 * edad + (5 if sexo == "h" else -161)
+    tdee = bmr * _FACTOR_ACTIVIDAD.get(str(perfil.get("actividad", "moderado")), 1.55)
+    return round(tdee * _FACTOR_OBJETIVO.get(str(perfil.get("objetivo", "mantener")), 1.0))
+
+
 def config_nutricion(cfg: dict) -> ConfigNutricion:
     n = cfg.get("nutricion", {}) or {}
     base = ConfigNutricion()
     frac = cfg.get("fraccion_ingesta_menu", n.get("fraccion_ingesta_menu"))
+    # kcal automaticas desde el perfil corporal si esta activado (#4/#5); si no, manual.
+    perfil = cfg.get("perfil", {}) or {}
+    kcal_manual = float(cfg.get("kcal_por_comensal", base.kcal_por_comensal_dia))
+    kcal = kcal_manual
+    prot_min = float(n.get("proteina_g_por_kg_min", base.proteina_g_por_kg_min))
+    if perfil.get("calcular_kcal_auto"):
+        auto = kcal_desde_perfil(perfil)
+        if auto:
+            kcal = auto
+        # Perder/ganar peso -> mas proteina para preservar/ganar musculo (#5).
+        objetivo = str(perfil.get("objetivo", "mantener"))
+        if objetivo == "perder":
+            prot_min = max(prot_min, 1.6)
+        elif objetivo == "ganar":
+            prot_min = max(prot_min, 1.8)
     return ConfigNutricion(
-        kcal_por_comensal_dia=float(cfg.get("kcal_por_comensal", base.kcal_por_comensal_dia)),
+        kcal_por_comensal_dia=kcal,
         peso_kg_por_comensal=float(n.get("peso_kg_por_comensal", base.peso_kg_por_comensal)),
         dias=int(n.get("dias", base.dias)),
         # % de la energia del dia recomendado por franja (FEN/AESAN); si no se fija
@@ -146,7 +188,7 @@ def config_nutricion(cfg: dict) -> ConfigNutricion:
         pct_comida=float(n.get("pct_comida", base.pct_comida)),
         pct_cena=float(n.get("pct_cena", base.pct_cena)),
         fraccion_ingesta_menu=float(frac) if frac is not None else None,
-        proteina_g_por_kg_min=float(n.get("proteina_g_por_kg_min", base.proteina_g_por_kg_min)),
+        proteina_g_por_kg_min=prot_min,
         sal_g_max_dia=float(n.get("sal_g_max_dia", base.sal_g_max_dia)),
         fibra_g_min_dia=float(n.get("fibra_g_min_dia", base.fibra_g_min_dia)),
         energia_tolerancia=float(n.get("energia_tolerancia", base.energia_tolerancia)),
@@ -273,6 +315,7 @@ def generar_menu(
                 {p: g / c.raciones for p, g in c.productos_gramos.items()}
                 if c.raciones else {}
             ),
+            nutri=(lambda p: nutri_score(p, _g)[1] if p else "")(c.nutricion_por_100g()),
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.

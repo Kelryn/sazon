@@ -190,3 +190,57 @@ def resumen_legible(bandas: list[BandaNutriente]) -> str:
         hi = f"{b.maximo:.0f}" if b.maximo is not None else "—"
         lineas.append(f"  {b.nutriente:14s} [{lo:>7} .. {hi:>7}] {b.unidad}  ({b.tipo})")
     return "\n".join(lineas)
+
+
+# --- Nutri-Score (#2): algoritmo FSA/Nutri-Score 2017 para alimentos generales ---
+# Determinista, a partir de la composicion por 100 g. Nota: el % de fruta/verdura/
+# legumbre se ESTIMA por el grupo de la receta (el catalogo no lo da exacto).
+
+def _puntos(valor: float, umbrales: list[float]) -> int:
+    """Puntos = nº de umbrales superados (0..len)."""
+    p = 0
+    for u in umbrales:
+        if valor > u:
+            p += 1
+    return p
+
+
+# Umbrales oficiales (por 100 g). Energia en kJ; sodio en mg.
+_U_ENERGIA = [335, 670, 1005, 1340, 1675, 2010, 2345, 2680, 3015, 3350]
+_U_AZUCAR = [4.5, 9, 13.5, 18, 22.5, 27, 31, 36, 40, 45]
+_U_SAT = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+_U_SODIO = [90, 180, 270, 360, 450, 540, 630, 720, 810, 900]
+_U_FIBRA = [0.9, 1.9, 2.8, 3.7, 4.7]          # AOAC
+_U_PROTEINA = [1.6, 3.2, 4.8, 6.4, 8.0]
+# Puntos de fruta/verdura/legumbre por % estimado (grupo de la receta).
+_FVL_POR_GRUPO = {"verdura": 2, "fruta": 2, "legumbre": 2}
+
+
+def nutri_score(por_100g: dict, grupo: str = "otro") -> tuple[int, str]:
+    """Devuelve (puntos, letra A-E) del Nutri-Score a partir de la composicion por
+    100 g (energia_kcal, azucares, grasas_sat, sal, fibra, proteinas) y el grupo."""
+    energia_kj = por_100g.get("energia_kcal", 0.0) * 4.184
+    sodio_mg = por_100g.get("sal", 0.0) * 400.0  # 1 g de sal ~ 400 mg de sodio
+    malos = (
+        _puntos(energia_kj, _U_ENERGIA)
+        + _puntos(por_100g.get("azucares", 0.0), _U_AZUCAR)
+        + _puntos(por_100g.get("grasas_sat", 0.0), _U_SAT)
+        + _puntos(sodio_mg, _U_SODIO)
+    )
+    p_fibra = _puntos(por_100g.get("fibra", 0.0), _U_FIBRA)
+    p_prot = _puntos(por_100g.get("proteinas", 0.0), _U_PROTEINA)
+    p_fvl = _FVL_POR_GRUPO.get(grupo, 0)
+    # Regla oficial: si malos >= 11 y el FVL no llega a 5 puntos, la proteina no cuenta.
+    buenos = p_fibra + p_fvl + (p_prot if (malos < 11 or p_fvl >= 5) else 0)
+    puntos = malos - buenos
+    if puntos <= -1:
+        letra = "A"
+    elif puntos <= 2:
+        letra = "B"
+    elif puntos <= 10:
+        letra = "C"
+    elif puntos <= 18:
+        letra = "D"
+    else:
+        letra = "E"
+    return puntos, letra

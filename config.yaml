@@ -3,6 +3,18 @@
 # --- Menu y comensales (Fase 5) ---
 num_comensales: 2
 kcal_por_comensal: 2000
+# Perfil corporal para calcular las kcal automaticamente (#4/#5). Si
+# calcular_kcal_auto=true, kcal_por_comensal se deriva de estos datos (Mifflin-St Jeor
+# + factor de actividad + objetivo). sexo: h|m. actividad: sedentario|ligero|moderado|
+# activo|muy_activo. objetivo: perder|mantener|ganar (ajusta kcal y suelo de proteina).
+perfil:
+  calcular_kcal_auto: false
+  peso_kg: 70
+  altura_cm: 175
+  edad: 30
+  sexo: h
+  actividad: moderado
+  objetivo: mantener
 comidas_por_dia: ["comida", "cena"]     # franjas que planifica el menu (comida y cena)
 # Reparto de nutrientes A LO LARGO DEL DIA (minimo 3 comidas). El menu planifica
 # comida y cena; su parte del dia sale del reparto recomendado FEN/AESAN

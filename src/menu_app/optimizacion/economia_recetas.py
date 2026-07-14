@@ -119,6 +119,14 @@ class RecetaCalculada:
             return {}
         return {k: v / self.raciones for k, v in self.nutricion.items()}
 
+    def nutricion_por_100g(self) -> dict[str, float]:
+        """Composicion por 100 g de la receta (para el Nutri-Score). Usa el peso total
+        de los productos casados; {} si no se conoce el peso."""
+        total_g = sum(self.productos_gramos.values())
+        if total_g <= 0:
+            return {}
+        return {k: v / total_g * 100.0 for k, v in self.nutricion.items()}
+
 
 # Marcas de que un ingrediente es OPCIONAL / de adorno: si no casa, no descarta
 # la receta (se puede cocinar sin el).

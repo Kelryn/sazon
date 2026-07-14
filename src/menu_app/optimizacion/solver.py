@@ -38,6 +38,7 @@ class RecetaOpt:
     salud: float = 0.0  # -1..1: cuanto de sana es (grupos buenos - grasa sat/azucar/sal)
     tiempo_min: int | None = None  # tiempo de preparacion (min), para el "por que" (#35)
     productos_gramos: dict[str, float] = None  # gramos POR RACION de cada producto (#23)
+    nutri: str = ""  # letra Nutri-Score A-E (#2), "" si no se pudo calcular
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de

@@ -313,8 +313,23 @@ def _fila_nutrientes(datos: dict, cfg: dict) -> str:
     )
 
 
+_NUTRI_COLOR = {"A": "#038141", "B": "#85bb2f", "C": "#fecb02", "D": "#ee8100", "E": "#e63e11"}
+
+
+def _badge_nutri(letra: str) -> str:
+    """Distintivo Nutri-Score (A verde ... E rojo)."""
+    if not letra or letra not in _NUTRI_COLOR:
+        return ""
+    return (
+        f'<span title="Nutri-Score {letra} (estimado)" style="display:inline-block;'
+        f"min-width:16px;text-align:center;background:{_NUTRI_COLOR[letra]};color:#fff;"
+        f'font-weight:800;border-radius:4px;padding:0 4px;font-size:11px">{letra}</span>'
+    )
+
+
 def _link_receta(rid: str, info: dict, raciones: float | None = None) -> str:
     fav = ' <span class="fav">★</span>' if info.get("es_favorita") else ""
+    nutri = " " + _badge_nutri(info.get("nutri", "")) if info.get("nutri") else ""
     rac = f' <span class="meta">({raciones:.2g} rac/pers.)</span>' if raciones else ""
     # Explicabilidad (#35): por que entro esta receta -> tooltip al pasar el raton.
     porque = info.get("por_que", "")
@@ -322,7 +337,7 @@ def _link_receta(rid: str, info: dict, raciones: float | None = None) -> str:
     marca = ' <span class="meta" title="' + html.escape(porque) + '">ⓘ</span>' if porque else ""
     return (
         f'<a class="receta" href="/receta/{html.escape(rid)}"{title}>'
-        f'{html.escape(info.get("titulo", rid))}</a>{fav}{rac}{marca}'
+        f'{html.escape(info.get("titulo", rid))}</a>{fav}{nutri}{rac}{marca}'
     )
 
 
@@ -1264,6 +1279,46 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             '<p class="meta">Los cambios se guardan en <code>config.usuario.yaml</code> '
             "(no tocan config.yaml); borra ese fichero para volver a los valores base.</p></div>"
         )
+        # --- Perfil corporal: calcular kcal automaticamente (#4/#5) ---
+        perfil = cfg.get("perfil", {}) or {}
+        auto = bool(perfil.get("calcular_kcal_auto"))
+        from ..optimizacion.servicio import kcal_desde_perfil as _kcal_perfil
+        kcal_calc = _kcal_perfil(perfil)
+        estado_kcal = (
+            f'<p class="ok">Con este perfil: <b>{kcal_calc:.0f} kcal/día</b>.</p>'
+            if kcal_calc else '<p class="note">Completa los datos para calcular las kcal.</p>'
+        )
+
+        def _sel_perfil(nombre, etiqueta, opciones, actual):
+            ops = "".join(
+                f'<option value="{v}"{" selected" if str(actual) == v else ""}>{t}</option>'
+                for v, t in opciones
+            )
+            return f'<div><label>{etiqueta}</label><select name="{nombre}">{ops}</select></div>'
+
+        cuerpo += (
+            '<div class="card"><div class="franja">Perfil y calorías</div>'
+            '<form method="post" action="/config/perfil"><div class="row">'
+            '<div><label style="display:inline-flex;align-items:center;gap:6px">'
+            f'<input type="checkbox" name="calcular_kcal_auto" value="1" style="width:auto" '
+            f'{"checked" if auto else ""}> Calcular kcal automáticamente</label>'
+            '<p class="note">Si lo activas, las kcal salen de tu perfil (Mifflin-St Jeor).</p></div>'
+            + _num("peso_kg", "Peso (kg)", int(perfil.get("peso_kg", 70)), "", "1", "20")
+            + _num("altura_cm", "Altura (cm)", int(perfil.get("altura_cm", 175)), "", "1", "100")
+            + _num("edad", "Edad", int(perfil.get("edad", 30)), "", "1", "10")
+            + "</div><div class='row'>"
+            + _sel_perfil("sexo", "Sexo", [("h", "Hombre"), ("m", "Mujer")], perfil.get("sexo", "h"))
+            + _sel_perfil("actividad", "Actividad", [
+                ("sedentario", "Sedentario"), ("ligero", "Ligero"), ("moderado", "Moderado"),
+                ("activo", "Activo"), ("muy_activo", "Muy activo")], perfil.get("actividad", "moderado"))
+            + _sel_perfil("objetivo", "Objetivo", [
+                ("perder", "Perder peso"), ("mantener", "Mantener"), ("ganar", "Ganar músculo")],
+                perfil.get("objetivo", "mantener"))
+            + "</div>"
+            + estado_kcal
+            + '<div style="margin-top:10px"><button class="btn" type="submit">Guardar perfil</button></div>'
+            "</form></div>"
+        )
         # --- Actualizaciones (Fase 11): un solo boton, repo fijo, instala solo ---
         info = _ACTUALIZACION["estado"]
         if info:
@@ -1284,6 +1339,24 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             "instalador automáticamente; si ya estás al día, te lo indica.</p></div>"
         )
         return _pagina("Configuración", cuerpo)
+
+    @app.post("/config/perfil")
+    async def config_perfil(request: Request):
+        form = await request.form()
+        try:
+            perfil = {
+                "calcular_kcal_auto": form.get("calcular_kcal_auto") == "1",
+                "peso_kg": float(form.get("peso_kg", 70) or 70),
+                "altura_cm": float(form.get("altura_cm", 175) or 175),
+                "edad": int(form.get("edad", 30) or 30),
+                "sexo": str(form.get("sexo", "h")),
+                "actividad": str(form.get("actividad", "moderado")),
+                "objetivo": str(form.get("objetivo", "mantener")),
+            }
+        except (TypeError, ValueError):
+            return RedirectResponse("/config?msg=Perfil: valores no válidos.", status_code=303)
+        guardar_overlay(config_path, {"perfil": perfil})
+        return RedirectResponse("/config?msg=Perfil guardado.", status_code=303)
 
     @app.post("/actualizaciones/comprobar")
     def actualizaciones_comprobar():
