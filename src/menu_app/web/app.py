@@ -1291,6 +1291,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                       _pct(cfg, "evitar_procesados_pct"),
                       "Penaliza recetas con productos muy procesados (bollería, precocinados, "
                       "con aditivos…). 0 % = desactivado.")
+            + _slider("estacionalidad_pct", "Preferir temporada",
+                      _pct(cfg, "estacionalidad_pct"),
+                      "Premia recetas con frutas y verduras de temporada este mes (más baratas "
+                      "y sabrosas). 0 % = desactivado.")
             + "</div><div class='row'>"
             + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
                    int(cfg.get("tiempo_max_receta_min", 0) or 0),
@@ -1418,6 +1422,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "salud_pct": float(form.get("salud_pct", 0)),
                 "sobra_pct": float(form.get("sobra_pct", 0)),
                 "evitar_procesados_pct": float(form.get("evitar_procesados_pct", 0)),
+                "estacionalidad_pct": float(form.get("estacionalidad_pct", 0)),
                 "tiempo_max_receta_min": int(form.get("tiempo_max_receta_min", 0) or 0),
                 "presupuesto_max_semana": float(form.get("presupuesto_max_semana", 0) or 0),
                 "ingredientes_excluidos": [

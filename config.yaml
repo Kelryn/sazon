@@ -43,6 +43,10 @@ salud_pct: 0                            # priorizar SALUD 0-100 (grupos sanos, m
                                         # sat/azucar/sal). 0 = solo coste y sabor. (#26)
 evitar_procesados_pct: 0                # evitar ULTRAPROCESADOS 0-100 (NOVA 4): penaliza
                                         # recetas con productos muy procesados. 0 = off. (#3)
+estacionalidad_pct: 0                   # preferir TEMPORADA 0-100: premia frutas/verduras
+                                        # del mes actual (mas baratas y sabrosas). 0 = off. (#11)
+# mes_temporada: 0                      # (opcional) fija el mes 1-12 para la temporada;
+                                        # 0/omitido = mes actual.
 sobra_pct: 0                            # reducir SOBRAS 0-100: prefiere menus que aprovechan
                                         # el formato comprado (menos desperdicio). Sube el
                                         # tiempo de calculo (hasta ~25s). 0 = desactivado. (#23)

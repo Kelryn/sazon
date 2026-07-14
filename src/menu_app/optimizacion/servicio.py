@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from ..configuracion import DIAS_SEMANA as _DIAS_SEMANA
 from ..configuracion import dias_batchcooking as _dias_bc_cfg
 from .economia_recetas import calcular_todas
+from .estacionalidad import puntua_estacionalidad
 from .grupos_alimentos import grupo_receta
 from .nutrientes import (
     NUTRIENTES_POR_COMIDA,
@@ -45,6 +46,8 @@ _PESOS_PCT = {
     "sobra_pct": ("peso_sobra", 3.0, 0),
     # Evitar ULTRAPROCESADOS (NOVA 4): 0 = desactivado (#3).
     "evitar_procesados_pct": ("peso_ultraprocesado", 8.0, 0),
+    # Preferir productos de TEMPORADA (frutas/verduras del mes): 0 = desactivado (#11).
+    "estacionalidad_pct": ("peso_estacionalidad", 6.0, 0),
 }
 
 
@@ -255,6 +258,10 @@ def generar_menu(
     tiempo_max = int(cfg.get("tiempo_max_receta_min", 0) or 0)
     peso_salud = peso_interno(cfg, "salud_pct")
     peso_sobra = peso_interno(cfg, "sobra_pct")
+    # Mes para la estacionalidad (#11): override en config o el mes actual.
+    from datetime import date
+
+    mes_temporada = int(cfg.get("mes_temporada") or 0) or date.today().month
     # Formatos de producto (g/ml por paquete) para penalizar la sobra real (#23/24).
     productos_formato: dict[str, float] = {}
     if peso_sobra > 0:
@@ -319,6 +326,7 @@ def generar_menu(
             ),
             nutri=(lambda p: nutri_score(p, _g)[1] if p else "")(c.nutricion_por_100g()),
             procesado=c.procesado,
+            estacionalidad=puntua_estacionalidad(c.ingredientes_norm, mes_temporada),
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -348,6 +356,7 @@ def generar_menu(
         peso_reutilizacion=peso_interno(cfg, "reutilizacion_pct"),
         peso_salud=peso_salud,
         peso_ultraprocesado=peso_interno(cfg, "evitar_procesados_pct"),
+        peso_estacionalidad=peso_interno(cfg, "estacionalidad_pct"),
         peso_sobra=peso_sobra,
         productos_formato=productos_formato,
         max_familia_libre=int(cfg.get("max_comidas_por_familia", 2)),

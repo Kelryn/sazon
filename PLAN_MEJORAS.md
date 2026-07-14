@@ -28,8 +28,8 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 
 ## Lote 3 — Nutrición y salud (v0.7.0)
 - ✅ **2** Nutri-Score · ✅ **3** NOVA/ultraprocesados · ✅ **4** kcal por peso/actividad.
-- ✅ **5** Perfiles por objetivo · **7** azúcares libres · **9** omega/trans · ✅ **10** alertas por comida.
-- ⬜ **11** Estacionalidad · ✅ **12** fibra por comida.
+- ✅ **5** Perfiles por objetivo · ⏸️ **7** azúcares libres · ⏸️ **9** omega/trans (⚠️ el catálogo no da estos datos) · ✅ **10** alertas por comida.
+- ✅ **11** Estacionalidad · ✅ **12** fibra por comida.
 
 ## Lote 4 — Matching (v0.8.0)
 - ⬜ **13** Cola de correcciones · **14** aprender sinónimos · **15** más barato · **16** marca blanca.
