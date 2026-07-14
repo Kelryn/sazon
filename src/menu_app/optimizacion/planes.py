@@ -109,6 +109,21 @@ def _distribuir(cuentas: dict[str, int], n: int) -> list[str | None]:
     return huecos
 
 
+def _variar_grupos(dias_ord: list[str], asign: dict[str, str | None], grupo) -> None:
+    """Reordena in-place las recetas asignadas a `dias_ord` para reducir dias
+    consecutivos con el MISMO grupo de alimento (#27). Solo intercambia dias; no
+    cambia que recetas hay. Heuristica voraz: si un dia repite grupo con el anterior,
+    intercambia con un dia posterior cuyo grupo rompa la repeticion."""
+    for i in range(1, len(dias_ord)):
+        d, dp = dias_ord[i], dias_ord[i - 1]
+        if asign.get(d) and grupo(asign.get(d)) == grupo(asign.get(dp)):
+            for j in range(i + 1, len(dias_ord)):
+                dj = dias_ord[j]
+                if asign.get(dj) and grupo(asign.get(dj)) != grupo(asign.get(dp)):
+                    asign[d], asign[dj] = asign[dj], asign[d]
+                    break
+
+
 def asignar_dias(datos: dict, dias_semana: list[str]) -> list[tuple[str, str | None, str | None, bool]]:
     """Asigna las selecciones guardadas a dias concretos: [(dia, comida, cena, es_bc)].
 
@@ -136,6 +151,17 @@ def asignar_dias(datos: dict, dias_semana: list[str]) -> list[tuple[str, str | N
 
     cenas = _distribuir(dict(datos.get("seleccion_cena") or {}), n)
     cena_por_dia = dict(zip(dias, cenas))
+
+    # VARIEDAD DE GRUPOS POR DIA (#27): reordena los dias (sin cambiar que recetas
+    # entran) para que no se repita el mismo grupo de alimento en dias consecutivos.
+    info = datos.get("recetas_info", {}) or {}
+
+    def _grupo(rid):
+        return (info.get(rid, {}) or {}).get("grupo", "otro") if rid else None
+
+    _variar_grupos(dias_bc, comida_por_dia, _grupo)
+    _variar_grupos(dias_libres, comida_por_dia, _grupo)
+    _variar_grupos(dias, cena_por_dia, _grupo)
 
     # Evita misma receta en comida y cena del mismo dia (intercambio simple).
     for i, dia in enumerate(dias):
@@ -165,6 +191,18 @@ def _excluidas_para_semana(semanas: dict[int, dict], semana: int, ventana: int) 
     return frozenset(vetadas)
 
 
+def _historico_semanas(conn: sqlite3.Connection, ventana: int) -> list[set[str]]:
+    """Recetas usadas en las `ventana` semanas MAS RECIENTES ya guardadas (de planes
+    anteriores), de mas nueva a mas antigua. Base de la ROTACION multi-semana (#28):
+    un plan nuevo no repite lo cocinado en las ultimas semanas."""
+    if ventana <= 0:
+        return []
+    filas = conn.execute(
+        "SELECT datos FROM planes ORDER BY creado DESC, semana DESC LIMIT ?", (ventana,)
+    ).fetchall()
+    return [_usadas_en(json.loads(f["datos"])) for f in filas]
+
+
 def generar_plan(
     conn: sqlite3.Connection,
     cfg: dict,
@@ -177,10 +215,21 @@ def generar_plan(
     ventana = semanas_exclusion(cfg)
     plan_id = datetime.now(timezone.utc).strftime("plan-%Y%m%d-%H%M%S")
 
+    # Rotacion multi-semana (#28): parte del histórico de planes anteriores, para no
+    # repetir lo cocinado en las ultimas `ventana` semanas aunque sea un plan nuevo.
+    historico = _historico_semanas(conn, ventana)
+
     resultados: list[ResultadoMenu] = []
     previas: dict[int, dict] = {}
     for semana in range(1, n + 1):
-        excluidas = _excluidas_para_semana(previas, semana, ventana) if ventana else frozenset()
+        if ventana:
+            # Ventana de `ventana` semanas: primero las de ESTE plan (mas recientes),
+            # y si faltan, se rellena con el historico de planes anteriores.
+            recientes = [_usadas_en(previas[s]) for s in range(semana - 1, 0, -1)]
+            combinado = (recientes + historico)[:ventana]
+            excluidas = frozenset().union(*combinado) if combinado else frozenset()
+        else:
+            excluidas = frozenset()
         res = generar_menu(conn, cfg, batchcooking=batchcooking, excluidas=excluidas)
         resultados.append(res)
         guardar_semana(conn, plan_id, semana, res, batchcooking=batchcooking)

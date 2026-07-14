@@ -14,8 +14,8 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ✅ **34** Cache de `RecetaCalculada` (coste/nutrición).
 
 ## Lote 2 — Motor: variedad, explicabilidad y estructura de menú
-- 🚧 **26** Multiobjetivo coste/salud/sabor (deslizador Pareto).
-- ⬜ **27** Variedad de grupos por día · **28** Rotación multi-semana.
+- ✅ **26** Multiobjetivo coste/salud/sabor (deslizador Pareto).
+- ✅ **27** Variedad de grupos por día · ✅ **28** Rotación multi-semana.
 - ✅ **30** Tiempo máximo de preparación entre semana.
 - ✅ **35** Explicabilidad (por qué entró cada receta).
 - ⬜ **33** Warm-start del solver · **37** batchcooking multi-día · **38** nº de platos por comida.
