@@ -37,6 +37,7 @@ class RecetaOpt:
     productos: frozenset[str] = frozenset()  # productos Alcampo que usa (racionalizar compra)
     salud: float = 0.0  # -1..1: cuanto de sana es (grupos buenos - grasa sat/azucar/sal)
     tiempo_min: int | None = None  # tiempo de preparacion (min), para el "por que" (#35)
+    productos_gramos: dict[str, float] = None  # gramos POR RACION de cada producto (#23)
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de
@@ -182,6 +183,8 @@ def optimizar_comida_cena(
     peso_variedad: float = 3.0,
     peso_reutilizacion: float = 0.0,
     peso_salud: float = 0.0,
+    peso_sobra: float = 0.0,
+    productos_formato: dict[str, float] | None = None,
     max_familia_libre: int = 2,
     min_por_grupo: dict[str, int] | None = None,
     max_por_grupo: dict[str, int] | None = None,
@@ -360,6 +363,34 @@ def optimizar_comida_cena(
             objetivo += peso_reutilizacion * y
         n_binarios_reutil = idx
 
+    # SOBRA REAL (Enfoque B, #23/24): por cada producto, gramos_p = Σ raciones·gramos/
+    # racion·comensales; unidades_p (entero) >= gramos_p/formato; se penaliza la sobra en
+    # PAQUETES: (unidades_p·formato − gramos_p)/formato = unidades_p − gramos_p/formato.
+    # Asi el solver prefiere menus que aprovechan el formato comprado (menos desperdicio).
+    # Restringido a productos usados por >=2 recetas del pool (donde la eleccion importa).
+    n_vars_sobra = 0
+    if peso_sobra > 0 and productos_formato:
+        gramos_por_prod: dict[str, list] = {}
+        recetas_prod: dict[str, set[str]] = {}
+        for _u, x_vars, pool in grupos:
+            for r in pool:
+                for p, g in (r.productos_gramos or {}).items():
+                    if g > 0 and productos_formato.get(p):
+                        gramos_por_prod.setdefault(p, []).append((x_vars[r.id], g))
+                        recetas_prod.setdefault(p, set()).add(r.id)
+        idx = 0
+        for p, terms in gramos_por_prod.items():
+            if len(recetas_prod[p]) < 2:
+                continue  # un solo plato usa p: su sobra no depende de la combinacion
+            formato = productos_formato[p]
+            gramos_p = pulp.lpSum(xv * g * num_comensales for xv, g in terms)
+            u = pulp.LpVariable(f"uds_{idx}", lowBound=0, cat="Integer")
+            idx += 1
+            prob += u * formato >= gramos_p, f"uds_{idx}"
+            # sobra en paquetes: u - gramos_p/formato (>=0). Penaliza el desperdicio.
+            objetivo += peso_sobra * (u - gramos_p / formato)
+        n_vars_sobra = idx
+
     # Menu ALTERNATIVO: al menos `min_diferencias` huecos deben usar recetas que
     # NO esten en el menu anterior (`corte`).
     if corte:
@@ -424,7 +455,7 @@ def optimizar_comida_cena(
     kw = {"msg": 0}
     if tiempo_max_solver and tiempo_max_solver > 0:
         kw["timeLimit"] = tiempo_max_solver
-    elif n_binarios_reutil > 0:
+    elif n_binarios_reutil > 0 or n_vars_sobra > 0:
         kw["timeLimit"] = 25
     if gap_solver and gap_solver > 0:
         kw["gapRel"] = gap_solver

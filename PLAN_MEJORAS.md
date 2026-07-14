@@ -19,7 +19,7 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ✅ **30** Tiempo máximo de preparación entre semana.
 - ✅ **35** Explicabilidad (por qué entró cada receta).
 - ⬜ **33** Warm-start del solver · **37** batchcooking multi-día · **38** nº de platos por comida.
-- ⬜ **23/24** Racionalización Enfoque B (sobra real) + coste real de compra.
+- ✅ **23/24** Racionalización Enfoque B (sobra real) + coste real de compra.
 
 ## Lote 3 — Nutrición y salud (v0.7.0)
 - ⬜ **2** Nutri-Score · **3** NOVA/ultraprocesados · **4** kcal por peso/actividad.

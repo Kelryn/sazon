@@ -40,6 +40,8 @@ _PESOS_PCT = {
     "reutilizacion_pct": ("peso_reutilizacion", 1.5, 0),
     # Priorizar SALUD (grupos sanos, menos grasa sat/azucar/sal): 0 = desactivado (#26).
     "salud_pct": ("peso_salud", 8.0, 0),
+    # Reducir SOBRAS reales (aprovechar el formato comprado): 0 = desactivado (#23/24).
+    "sobra_pct": ("peso_sobra", 3.0, 0),
 }
 
 
@@ -208,6 +210,17 @@ def generar_menu(
     # Tiempo maximo de preparacion (#30): descarta recetas que tarden mas (0 = sin tope).
     tiempo_max = int(cfg.get("tiempo_max_receta_min", 0) or 0)
     peso_salud = peso_interno(cfg, "salud_pct")
+    peso_sobra = peso_interno(cfg, "sobra_pct")
+    # Formatos de producto (g/ml por paquete) para penalizar la sobra real (#23/24).
+    productos_formato: dict[str, float] = {}
+    if peso_sobra > 0:
+        productos_formato = {
+            r["retailer_product_id"]: r["cantidad_base_g_ml"]
+            for r in conn.execute(
+                "SELECT retailer_product_id, cantidad_base_g_ml FROM productos "
+                "WHERE cantidad_base_g_ml IS NOT NULL AND cantidad_base_g_ml > 0"
+            ).fetchall()
+        }
     recetas: dict[str, RecetaOpt] = {}
     descartadas = 0
     descartadas_rol = 0
@@ -256,6 +269,10 @@ def generar_menu(
             productos=frozenset(c.productos),
             salud=salud_receta(_g, c.nutricion_racion()),
             tiempo_min=c.tiempo_total_min,
+            productos_gramos=(
+                {p: g / c.raciones for p, g in c.productos_gramos.items()}
+                if c.raciones else {}
+            ),
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -284,6 +301,8 @@ def generar_menu(
         peso_variedad=float(cfg.get("peso_variedad", 3.0)),
         peso_reutilizacion=peso_interno(cfg, "reutilizacion_pct"),
         peso_salud=peso_salud,
+        peso_sobra=peso_sobra,
+        productos_formato=productos_formato,
         max_familia_libre=int(cfg.get("max_comidas_por_familia", 2)),
         min_por_grupo=(cfg.get("grupos_alimentos", {}) or {}).get("minimo_semana"),
         max_por_grupo=(cfg.get("grupos_alimentos", {}) or {}).get("maximo_semana"),

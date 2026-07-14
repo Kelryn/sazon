@@ -98,6 +98,9 @@ class RecetaCalculada:
     # Productos de Alcampo (retailer_product_id) que usa la receta: sirven para
     # racionalizar la compra (que las recetas del menu compartan productos).
     productos: set[str] = field(default_factory=set)
+    # Gramos TOTALES (receta entera) de cada producto de Alcampo: para penalizar la
+    # sobra real (Enfoque B, #23/24). Se divide por raciones para el valor por racion.
+    productos_gramos: dict[str, float] = field(default_factory=dict)
     # Nombres normalizados de TODOS los ingredientes (para excluir por lista negra).
     ingredientes_norm: set[str] = field(default_factory=set)
     # Tiempo total de preparacion en minutos (si la fuente lo da; None si no).
@@ -170,6 +173,7 @@ def calcular_receta(
     falta_no_opcional = False
     ingrediente_principal = None
     productos_usados: set[str] = set()
+    productos_gramos: dict[str, float] = {}
     ingredientes_norm: set[str] = set()
 
     for ing in ingredientes:
@@ -201,6 +205,8 @@ def calcular_receta(
         if cantidad is None:
             continue  # producto conocido pero sin cantidad ni peso por pieza -> no se prorratea
 
+        productos_gramos[rid] = productos_gramos.get(rid, 0.0) + cantidad  # para la sobra (#23)
+
         # Coste del ingrediente.
         precio_u = prod["precio_por_unidad"]
         factor = _FACTOR_PRECIO.get(prod["unidad_medida"])
@@ -229,6 +235,7 @@ def calcular_receta(
         falta_no_opcional=falta_no_opcional,
         ingrediente_principal=ingrediente_principal,
         productos=productos_usados,
+        productos_gramos=productos_gramos,
         ingredientes_norm=ingredientes_norm,
         tiempo_total_min=(cab["tiempo_total_min"] if cab else None),
         n_ingredientes=len(ingredientes),

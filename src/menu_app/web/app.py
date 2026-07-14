@@ -1244,6 +1244,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                       _pct(cfg, "salud_pct"),
                       "Premia recetas más sanas (verdura, legumbre, pescado, fruta; menos "
                       "grasa saturada, azúcar y sal). 0 % = solo cuentan coste y sabor.")
+            + _slider("sobra_pct", "Reducir sobras",
+                      _pct(cfg, "sobra_pct"),
+                      "Prefiere menús que aprovechan el formato comprado (menos desperdicio "
+                      "de producto). 0 % = desactivado. Sube el tiempo de cálculo (hasta ~25 s).")
             + "</div><div class='row'>"
             + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
                    int(cfg.get("tiempo_max_receta_min", 0) or 0),
@@ -1311,6 +1315,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "favoritas_pct": float(form.get("favoritas_pct", 50)),
                 "reutilizacion_pct": float(form.get("reutilizacion_pct", 0)),
                 "salud_pct": float(form.get("salud_pct", 0)),
+                "sobra_pct": float(form.get("sobra_pct", 0)),
                 "tiempo_max_receta_min": int(form.get("tiempo_max_receta_min", 0) or 0),
                 "presupuesto_max_semana": float(form.get("presupuesto_max_semana", 0) or 0),
                 "ingredientes_excluidos": [
@@ -1327,6 +1332,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                     "peso_favorita": None,
                     "peso_reutilizacion": None,
                     "peso_salud": None,
+                    "peso_sobra": None,
                 }
             )
         except (TypeError, ValueError):

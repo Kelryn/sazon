@@ -29,6 +29,9 @@ peso_variedad: 3.0                      # penalizacion por repetir TIPO de plato
 max_comidas_por_familia: 2              # comidas del mismo tipo antes de penalizar
 salud_pct: 0                            # priorizar SALUD 0-100 (grupos sanos, menos grasa
                                         # sat/azucar/sal). 0 = solo coste y sabor. (#26)
+sobra_pct: 0                            # reducir SOBRAS 0-100: prefiere menus que aprovechan
+                                        # el formato comprado (menos desperdicio). Sube el
+                                        # tiempo de calculo (hasta ~25s). 0 = desactivado. (#23)
 tiempo_max_receta_min: 0                # descarta recetas que tarden mas de N min (#30).
                                         # 0 = sin limite.
 # Presupuesto maximo por SEMANA en euros (tope duro). 0 = sin tope. Si choca con los
