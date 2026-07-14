@@ -18,8 +18,13 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ✅ **27** Variedad de grupos por día · ✅ **28** Rotación multi-semana.
 - ✅ **30** Tiempo máximo de preparación entre semana.
 - ✅ **35** Explicabilidad (por qué entró cada receta).
-- ⬜ **33** Warm-start del solver · **37** batchcooking multi-día · **38** nº de platos por comida.
 - ✅ **23/24** Racionalización Enfoque B (sobra real) + coste real de compra.
+- ⏸️ **33** Warm-start del solver — evaluado: **bajo ROI** para nuestros tamaños (el solve
+  base son ~4 s) y el warm-start de CBC vía PuLP es delicado; se deja aparcado.
+- ⏸️ **37** Batchcooking multi-día · ⏸️ **38** Nº de platos por comida — **requieren
+  rediseñar el modelo por día** del solver (hoy produce comida/cena planas y `asignar_dias`
+  las reparte a posteriori). Son cambios grandes y arriesgados: se abordarán en una
+  **sesión dedicada** (mini-proyecto propio) para no desestabilizar el motor.
 
 ## Lote 3 — Nutrición y salud (v0.7.0)
 - ⬜ **2** Nutri-Score · **3** NOVA/ultraprocesados · **4** kcal por peso/actividad.
