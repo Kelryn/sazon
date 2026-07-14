@@ -40,6 +40,7 @@ from ..optimizacion.exportar import (
     menu_a_pdf,
 )
 from ..optimizacion.economia_recetas import _FACTOR_PRECIO, _gramos_por_piezas
+from ..optimizacion.economia_recetas import invalidar_cache as invalidar_cache_recetas
 from ..optimizacion.nutrientes import objetivos_semanales
 from ..optimizacion.planes import asignar_dias, cargar_plan, generar_plan, regenerar_semana
 from ..optimizacion.servicio import _PESOS_PCT, config_nutricion, peso_interno
@@ -197,6 +198,7 @@ def _lanzar_actualizacion(cfg: dict, categorias: list[str] | None = None) -> boo
             resumen = actualizar_catalogo(
                 cfg, progreso=_CATALOGO["log"].append, categorias=categorias
             )
+            invalidar_cache_recetas()  # precios nuevos -> recalcular coste de recetas (#34)
             _CATALOGO["resumen"] = (
                 f"Catálogo actualizado: {resumen['procesados']} productos, "
                 f"{resumen['nuevos']} nuevos, {resumen['cambios_precio']} cambios de precio."
@@ -1033,6 +1035,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             conn.commit()
         finally:
             conn.close()
+        invalidar_cache_recetas()  # el precio/nutricion cambio -> recalcular coste (#34)
         return RedirectResponse(f"/catalogo/{producto_id}?msg=Producto actualizado.", status_code=303)
 
     # NOTA: la ruta NO puede ser "/catalogo/actualizar": chocaria con

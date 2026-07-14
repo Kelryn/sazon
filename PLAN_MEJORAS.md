@@ -11,7 +11,7 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ✅ **31** Exclusión de ingredientes que no gustan (lista negra).
 - ✅ **36** `timeLimit`/`gap` del MILP configurables.
 - ✅ **83** Índices SQLite en columnas de join/match.
-- ⬜ **34** Cache de `RecetaCalculada` (coste/nutrición).
+- ✅ **34** Cache de `RecetaCalculada` (coste/nutrición).
 
 ## Lote 2 — Motor: variedad, explicabilidad y estructura de menú
 - 🚧 **26** Multiobjetivo coste/salud/sabor (deslizador Pareto).

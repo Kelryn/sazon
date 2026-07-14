@@ -238,8 +238,49 @@ def calcular_receta(
     )
 
 
-def calcular_todas(conn: sqlite3.Connection) -> list[RecetaCalculada]:
+# Cache de calcular_todas (#34): recalcular coste/nutricion de ~4000 recetas en cada
+# generacion es caro. Se cachea keyed por una FIRMA barata que cambia cuando cambian
+# recetas, ingredientes, productos o el mapeo. Las ediciones de precio/nutricion de un
+# producto no cambian los contadores -> el visor/catalogo llama a invalidar_cache().
+_CACHE: dict = {"firma": None, "datos": None}
+
+
+def _firma_cache(conn: sqlite3.Connection):
+    try:
+        archivo = conn.execute("PRAGMA database_list").fetchone()["file"]
+    except Exception:  # noqa: BLE001
+        archivo = "?"
+
+    def _c(sql: str):
+        return conn.execute(sql).fetchone()[0]
+
+    return (
+        archivo,
+        _c("SELECT COUNT(*) FROM recetas"),
+        _c("SELECT COUNT(*) FROM receta_ingredientes"),
+        _c("SELECT COUNT(*) FROM productos"),
+        _c("SELECT COUNT(*) FROM mapeo_ingr_producto"),
+        _c("SELECT MAX(fecha) FROM mapeo_ingr_producto"),
+    )
+
+
+def invalidar_cache() -> None:
+    """Fuerza el recalculo en la proxima llamada a calcular_todas (tras editar precios
+    o nutricion de un producto, que no cambian los contadores de la firma)."""
+    _CACHE["firma"] = None
+    _CACHE["datos"] = None
+
+
+def calcular_todas(conn: sqlite3.Connection, usar_cache: bool = True) -> list[RecetaCalculada]:
+    if usar_cache:
+        firma = _firma_cache(conn)
+        if _CACHE["firma"] == firma and _CACHE["datos"] is not None:
+            return _CACHE["datos"]
     productos = _cargar_productos(conn)
     mapeo = _cargar_mapeo(conn)
     ids = [r["id"] for r in conn.execute("SELECT id FROM recetas").fetchall()]
-    return [calcular_receta(conn, rid, productos, mapeo) for rid in ids]
+    datos = [calcular_receta(conn, rid, productos, mapeo) for rid in ids]
+    if usar_cache:
+        _CACHE["firma"] = firma
+        _CACHE["datos"] = datos
+    return datos
