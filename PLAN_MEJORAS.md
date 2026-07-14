@@ -14,10 +14,10 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ⬜ **34** Cache de `RecetaCalculada` (coste/nutrición).
 
 ## Lote 2 — Motor: variedad, explicabilidad y estructura de menú
-- ⬜ **26** Multiobjetivo coste/salud/sabor (deslizador Pareto).
+- 🚧 **26** Multiobjetivo coste/salud/sabor (deslizador Pareto).
 - ⬜ **27** Variedad de grupos por día · **28** Rotación multi-semana.
-- ⬜ **30** Tiempo máximo de preparación entre semana.
-- ⬜ **35** Explicabilidad (por qué entró cada receta).
+- ✅ **30** Tiempo máximo de preparación entre semana.
+- ✅ **35** Explicabilidad (por qué entró cada receta).
 - ⬜ **33** Warm-start del solver · **37** batchcooking multi-día · **38** nº de platos por comida.
 - ⬜ **23/24** Racionalización Enfoque B (sobra real) + coste real de compra.
 
@@ -74,6 +74,25 @@ tarjeta, tabla, cabecera, formulario…) qué quiere y cómo lo quiere. Metodolo
 - ⬜ Revisión final y guía de estilo actualizada.
 Depende de decisiones del usuario (no se puede hacer en autónomo). Idealmente después
 del Lote 7 (interfaz) o cuando el usuario quiera abrir la entrevista.
+
+## Lote 12 — Sistema de valoración personal de recetas (v0.16.0) *(petición usuario)*
+Sistema completo para **clasificar personalmente** cada receta hecha, y usarlo para
+afinar los gustos y la adherencia a la dieta. Requisitos del usuario:
+- ⬜ **Cola de valoración**: mostrar las recetas **hechas esta semana o una semana
+  anterior** que aún no se han valorado. Al valorar una, no se vuelve a pedir.
+- ⬜ **Baremos con 1–5 estrellas**: **sabor**, **frescura** (más de verano ↔ invierno),
+  **recepción estomacal** (sentó mejor/peor), y otros útiles que se propongan
+  (**saciedad**, **facilidad de preparación**, **se repetiría**, **relación calidad/precio**,
+  **apetecible en frío/tupper**). El usuario validará la lista final de baremos.
+- ⬜ **Persistencia**: la valoración se guarda; no se vuelve a solicitar. Se puede
+  **re-valorar** buscando en las recetas **ya clasificadas** (buscador/histórico).
+- ⬜ **Detalle cualitativo**: marcar **qué ingredientes** gustaron más y/o si fue el
+  **método de preparación**, para **recomendar por similitud** (ingredientes/técnica).
+- ⬜ **Uso en el motor**: la valoración personal alimenta la palatabilidad y ayuda a
+  proponer recetas afines; permite una dieta más estricta sin perder gusto.
+- ⬜ **Modelo de datos**: tabla `valoraciones` (receta_id, baremo, estrellas, fecha) +
+  `valoracion_detalle` (ingredientes/aspectos preferidos); recomendador por similitud.
+Se apoya en el histórico de planes (recetas hechas) y en el editor de recetas.
 
 ---
 Al terminar todos los lotes → **QA final** (fase última del ROADMAP).

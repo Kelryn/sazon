@@ -27,6 +27,10 @@ sabor_pct: 50                           # cuanto premia el sabor (ratings) frent
 cena_ligera_pct: 50                     # cuanto premia que la CENA sea ligera y sencilla
 peso_variedad: 3.0                      # penalizacion por repetir TIPO de plato (variedad)
 max_comidas_por_familia: 2              # comidas del mismo tipo antes de penalizar
+salud_pct: 0                            # priorizar SALUD 0-100 (grupos sanos, menos grasa
+                                        # sat/azucar/sal). 0 = solo coste y sabor. (#26)
+tiempo_max_receta_min: 0                # descarta recetas que tarden mas de N min (#30).
+                                        # 0 = sin limite.
 # Presupuesto maximo por SEMANA en euros (tope duro). 0 = sin tope. Si choca con los
 # suelos de nutrientes puede hacer el menu infactible.
 presupuesto_max_semana: 0

@@ -35,6 +35,8 @@ class RecetaOpt:
     grupo: str = "otro"  # grupo de alimento del ingrediente principal (AESAN)
     es_favorita: bool = False  # marcada por el usuario: se prioriza (bonus en objetivo)
     productos: frozenset[str] = frozenset()  # productos Alcampo que usa (racionalizar compra)
+    salud: float = 0.0  # -1..1: cuanto de sana es (grupos buenos - grasa sat/azucar/sal)
+    tiempo_min: int | None = None  # tiempo de preparacion (min), para el "por que" (#35)
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de
@@ -179,6 +181,7 @@ def optimizar_comida_cena(
     peso_favorita: float = 4.0,
     peso_variedad: float = 3.0,
     peso_reutilizacion: float = 0.0,
+    peso_salud: float = 0.0,
     max_familia_libre: int = 2,
     min_por_grupo: dict[str, int] | None = None,
     max_por_grupo: dict[str, int] | None = None,
@@ -255,7 +258,7 @@ def optimizar_comida_cena(
     # favorita (por comida, u) - bonus ligera/sencilla (solo cena). Las favoritas
     # restan coste "virtual" para entrar antes, pero siguen atadas a las bandas.
     def _bonus_comida(r: RecetaOpt) -> float:
-        bonus = peso_palatabilidad * r.palatabilidad
+        bonus = peso_palatabilidad * r.palatabilidad + peso_salud * r.salud
         if r.es_favorita:
             bonus += peso_favorita
         return bonus

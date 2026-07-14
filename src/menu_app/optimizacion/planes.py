@@ -17,7 +17,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from .servicio import ResultadoMenu, generar_menu, semanas_exclusion
+from .servicio import ResultadoMenu, generar_menu, por_que_receta, semanas_exclusion
 
 
 def _serializar(res: ResultadoMenu, batchcooking: bool = False) -> str:
@@ -30,6 +30,7 @@ def _serializar(res: ResultadoMenu, batchcooking: bool = False) -> str:
             "es_favorita": res.recetas[rid].es_favorita,
             "es_batchcooking": res.recetas[rid].es_batchcooking,
             "grupo": res.recetas[rid].grupo,
+            "por_que": por_que_receta(res.recetas[rid]),  # explicabilidad (#35)
         }
         for rid in usadas
         if rid in res.recetas

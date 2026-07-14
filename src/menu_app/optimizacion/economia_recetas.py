@@ -100,6 +100,8 @@ class RecetaCalculada:
     productos: set[str] = field(default_factory=set)
     # Nombres normalizados de TODOS los ingredientes (para excluir por lista negra).
     ingredientes_norm: set[str] = field(default_factory=set)
+    # Tiempo total de preparacion en minutos (si la fuente lo da; None si no).
+    tiempo_total_min: int | None = None
 
     @property
     def cobertura(self) -> float:
@@ -150,7 +152,7 @@ def calcular_receta(
 ) -> RecetaCalculada:
     cab = conn.execute(
         "SELECT titulo, raciones, fuente, es_batchcooking, rol, es_favorita, "
-        "es_plato_unico, es_cena FROM recetas WHERE id = ?",
+        "es_plato_unico, es_cena, tiempo_total_min FROM recetas WHERE id = ?",
         (receta_id,),
     ).fetchone()
     ingredientes = conn.execute(
@@ -228,6 +230,7 @@ def calcular_receta(
         ingrediente_principal=ingrediente_principal,
         productos=productos_usados,
         ingredientes_norm=ingredientes_norm,
+        tiempo_total_min=(cab["tiempo_total_min"] if cab else None),
         n_ingredientes=len(ingredientes),
         n_costeados=costeados,
         ingredientes_sin_producto=sin_producto,

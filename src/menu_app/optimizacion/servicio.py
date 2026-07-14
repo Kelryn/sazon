@@ -38,6 +38,8 @@ _PESOS_PCT = {
     "favoritas_pct": ("peso_favorita", 8.0, 50),
     # Racionalizar la compra (que las recetas compartan productos): 0 = desactivado.
     "reutilizacion_pct": ("peso_reutilizacion", 1.5, 0),
+    # Priorizar SALUD (grupos sanos, menos grasa sat/azucar/sal): 0 = desactivado (#26).
+    "salud_pct": ("peso_salud", 8.0, 0),
 }
 
 
@@ -82,6 +84,51 @@ def familia_receta(titulo: str) -> str:
         if token.isalpha() and token not in _FAMILIA_IGNORA and len(token) > 2:
             return token
     return ""
+
+
+# Grupos de alimento "sanos" (mediterraneo/AESAN) que suman a la puntuacion de salud.
+_GRUPOS_SANOS = frozenset({"verdura", "legumbre", "pescado", "fruta"})
+
+
+def salud_receta(grupo: str, nutricion_racion: dict[str, float]) -> float:
+    """Puntuacion de salud -1..1 (determinista): premia grupos sanos y penaliza la
+    densidad de grasa saturada, azucares y sal por racion. Usada por el eje de salud
+    del optimizador (#26)."""
+    s = 0.0
+    if grupo in _GRUPOS_SANOS:
+        s += 0.6
+    elif grupo == "carne_roja":
+        s -= 0.3
+    kcal = max(1.0, nutricion_racion.get("energia_kcal", 0.0))
+    # Penaliza por cada 100 kcal: grasa sat (>4g malo), azucares (>10g), sal (>0.5g).
+    sat = nutricion_racion.get("grasas_sat", 0.0) / kcal * 100
+    azu = nutricion_racion.get("azucares", 0.0) / kcal * 100
+    sal = nutricion_racion.get("sal", 0.0) / kcal * 100
+    s -= min(0.4, max(0.0, (sat - 4.0) / 10.0))
+    s -= min(0.3, max(0.0, (azu - 10.0) / 20.0))
+    s -= min(0.3, max(0.0, (sal - 0.5) / 1.5))
+    return max(-1.0, min(1.0, s))
+
+
+def por_que_receta(r: RecetaOpt) -> str:
+    """Explica en una linea por que entro una receta en el menu (#35): coste, sabor,
+    salud, grupo, favorita, tiempo. Determinista, a partir de los datos de RecetaOpt."""
+    razones: list[str] = [f"{r.coste_racion:.2f} €/ración"]
+    if r.es_favorita:
+        razones.append("favorita ★")
+    if r.palatabilidad >= 0.7:
+        razones.append("bien valorada")
+    if r.salud >= 0.4:
+        razones.append("opción sana")
+    elif r.salud <= -0.2:
+        razones.append("capricho")
+    if r.grupo and r.grupo != "otro":
+        razones.append(r.grupo.replace("_", " "))
+    if r.es_batchcooking:
+        razones.append("batchcooking")
+    if r.tiempo_min:
+        razones.append(f"{r.tiempo_min} min")
+    return " · ".join(razones)
 
 
 def config_nutricion(cfg: dict) -> ConfigNutricion:
@@ -158,15 +205,22 @@ def generar_menu(
     excluidos_ing = [
         e.strip().lower() for e in (cfg.get("ingredientes_excluidos") or []) if str(e).strip()
     ]
+    # Tiempo maximo de preparacion (#30): descarta recetas que tarden mas (0 = sin tope).
+    tiempo_max = int(cfg.get("tiempo_max_receta_min", 0) or 0)
+    peso_salud = peso_interno(cfg, "salud_pct")
     recetas: dict[str, RecetaOpt] = {}
     descartadas = 0
     descartadas_rol = 0
     descartadas_excluidas = 0
+    descartadas_tiempo = 0
     for c in calculadas:
         if excluidos_ing and any(
             term in ing for ing in c.ingredientes_norm for term in excluidos_ing
         ):
             descartadas_excluidas += 1
+            continue
+        if tiempo_max and c.tiempo_total_min and c.tiempo_total_min > tiempo_max:
+            descartadas_tiempo += 1
             continue
         # Fuera si falta cobertura, si el ingrediente PRINCIPAL no se puede comprar,
         # o (exigir_todos_ingredientes) si falta CUALQUIER ingrediente no opcional:
@@ -198,8 +252,10 @@ def generar_menu(
             ),
             es_favorita=c.es_favorita,
             familia=familia_receta(c.titulo),
-            grupo=grupo_receta(c.titulo, c.ingrediente_principal),
+            grupo=(_g := grupo_receta(c.titulo, c.ingrediente_principal)),
             productos=frozenset(c.productos),
+            salud=salud_receta(_g, c.nutricion_racion()),
+            tiempo_min=c.tiempo_total_min,
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -227,6 +283,7 @@ def generar_menu(
         peso_favorita=peso_interno(cfg, "favoritas_pct"),
         peso_variedad=float(cfg.get("peso_variedad", 3.0)),
         peso_reutilizacion=peso_interno(cfg, "reutilizacion_pct"),
+        peso_salud=peso_salud,
         max_familia_libre=int(cfg.get("max_comidas_por_familia", 2)),
         min_por_grupo=(cfg.get("grupos_alimentos", {}) or {}).get("minimo_semana"),
         max_por_grupo=(cfg.get("grupos_alimentos", {}) or {}).get("maximo_semana"),
@@ -251,5 +308,8 @@ def generar_menu(
         descartadas_cobertura=descartadas,
         descartadas_rol=descartadas_rol,
         dias_bc=dias_bc if not batchcooking else list(_DIAS_SEMANA[:dias]),
-        meta={"descartadas_excluidas": descartadas_excluidas},
+        meta={
+            "descartadas_excluidas": descartadas_excluidas,
+            "descartadas_tiempo": descartadas_tiempo,
+        },
     )

@@ -314,9 +314,13 @@ def _fila_nutrientes(datos: dict, cfg: dict) -> str:
 def _link_receta(rid: str, info: dict, raciones: float | None = None) -> str:
     fav = ' <span class="fav">★</span>' if info.get("es_favorita") else ""
     rac = f' <span class="meta">({raciones:.2g} rac/pers.)</span>' if raciones else ""
+    # Explicabilidad (#35): por que entro esta receta -> tooltip al pasar el raton.
+    porque = info.get("por_que", "")
+    title = f' title="{html.escape(porque)}"' if porque else ""
+    marca = ' <span class="meta" title="' + html.escape(porque) + '">ⓘ</span>' if porque else ""
     return (
-        f'<a class="receta" href="/receta/{html.escape(rid)}">'
-        f'{html.escape(info.get("titulo", rid))}</a>{fav}{rac}'
+        f'<a class="receta" href="/receta/{html.escape(rid)}"{title}>'
+        f'{html.escape(info.get("titulo", rid))}</a>{fav}{rac}{marca}'
     )
 
 
@@ -1233,6 +1237,15 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                       "Premia que las recetas compartan productos (menos productos distintos "
                       "= menos sobras). 0 % = desactivado. Sube el tiempo de cálculo (hasta "
                       "~25 s con valores altos); ~40 % da buen equilibrio.")
+            + _slider("salud_pct", "Priorizar salud",
+                      _pct(cfg, "salud_pct"),
+                      "Premia recetas más sanas (verdura, legumbre, pescado, fruta; menos "
+                      "grasa saturada, azúcar y sal). 0 % = solo cuentan coste y sabor.")
+            + "</div><div class='row'>"
+            + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
+                   int(cfg.get("tiempo_max_receta_min", 0) or 0),
+                   "Descarta recetas que tarden más de estos minutos (0 = sin límite). "
+                   "Útil para entre semana.", "5", "0")
             + "</div>"
             "<label>Días batchcooking (laborales: plato único en tanda para llevar)</label>"
             f'<div style="margin:6px 0 4px">{casillas}</div>'
@@ -1294,6 +1307,8 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "cena_ligera_pct": float(form.get("cena_ligera_pct", 50)),
                 "favoritas_pct": float(form.get("favoritas_pct", 50)),
                 "reutilizacion_pct": float(form.get("reutilizacion_pct", 0)),
+                "salud_pct": float(form.get("salud_pct", 0)),
+                "tiempo_max_receta_min": int(form.get("tiempo_max_receta_min", 0) or 0),
                 "presupuesto_max_semana": float(form.get("presupuesto_max_semana", 0) or 0),
                 "ingredientes_excluidos": [
                     t.strip() for t in str(form.get("ingredientes_excluidos", "")).split(",")
@@ -1308,6 +1323,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                     "peso_cena_ligera_simple": None,
                     "peso_favorita": None,
                     "peso_reutilizacion": None,
+                    "peso_salud": None,
                 }
             )
         except (TypeError, ValueError):
