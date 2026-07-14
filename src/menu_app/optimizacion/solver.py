@@ -39,6 +39,7 @@ class RecetaOpt:
     tiempo_min: int | None = None  # tiempo de preparacion (min), para el "por que" (#35)
     productos_gramos: dict[str, float] = None  # gramos POR RACION de cada producto (#23)
     nutri: str = ""  # letra Nutri-Score A-E (#2), "" si no se pudo calcular
+    procesado: float = 0.0  # fraccion 0..1 de gramos ultraprocesados (NOVA 4) (#3)
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de
@@ -184,6 +185,7 @@ def optimizar_comida_cena(
     peso_variedad: float = 3.0,
     peso_reutilizacion: float = 0.0,
     peso_salud: float = 0.0,
+    peso_ultraprocesado: float = 0.0,
     peso_sobra: float = 0.0,
     productos_formato: dict[str, float] | None = None,
     max_familia_libre: int = 2,
@@ -263,6 +265,7 @@ def optimizar_comida_cena(
     # restan coste "virtual" para entrar antes, pero siguen atadas a las bandas.
     def _bonus_comida(r: RecetaOpt) -> float:
         bonus = peso_palatabilidad * r.palatabilidad + peso_salud * r.salud
+        bonus -= peso_ultraprocesado * r.procesado  # penaliza ultraprocesados (#3)
         if r.es_favorita:
             bonus += peso_favorita
         return bonus

@@ -341,6 +341,29 @@ def _link_receta(rid: str, info: dict, raciones: float | None = None) -> str:
     )
 
 
+# Umbrales de alerta POR COMILA y persona (#10): OMS sal <5 g/día, azúcares libres
+# <~50 g/día -> por comida (2 comidas grandes) avisamos por encima de estos.
+_SAL_ALERTA_COMIDA = 2.5   # g de sal por comida y persona
+_AZUCAR_ALERTA_COMIDA = 25  # g de azúcares por comida y persona
+
+
+def _alerta_comida(info: dict, raciones: float) -> str:
+    """Icono de aviso si una comida se pasa de sal o azúcar (por persona) (#10)."""
+    sal = (info.get("sal", 0) or 0) * raciones
+    azu = (info.get("azucares", 0) or 0) * raciones
+    avisos = []
+    if sal > _SAL_ALERTA_COMIDA:
+        avisos.append(f"sal alta ({sal:.1f} g)")
+    if azu > _AZUCAR_ALERTA_COMIDA:
+        avisos.append(f"azúcar alto ({azu:.0f} g)")
+    if not avisos:
+        return ""
+    return (
+        f' <span title="{html.escape("; ".join(avisos))}" '
+        f'style="cursor:help">⚠️</span>'
+    )
+
+
 def _tabla_dias(datos: dict) -> str:
     info = datos.get("recetas_info", {}) or {}
     raciones = datos.get("raciones", {}) or {}
@@ -353,7 +376,8 @@ def _tabla_dias(datos: dict) -> str:
         n_usos = (sel_com.get(rid, 0) or 0) + (sel_cen.get(rid, 0) or 0)
         x = raciones.get(rid)
         por_comida = (x / n_usos) if (x and n_usos) else None
-        return _link_receta(rid, info.get(rid, {}), por_comida)
+        enlace = _link_receta(rid, info.get(rid, {}), por_comida)
+        return enlace + _alerta_comida(info.get(rid, {}), por_comida or 1.0)
 
     filas = ""
     for dia, comida, cena, es_bc in asignar_dias(datos, DIAS_SEMANA):
@@ -1263,6 +1287,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                       _pct(cfg, "sobra_pct"),
                       "Prefiere menús que aprovechan el formato comprado (menos desperdicio "
                       "de producto). 0 % = desactivado. Sube el tiempo de cálculo (hasta ~25 s).")
+            + _slider("evitar_procesados_pct", "Evitar ultraprocesados",
+                      _pct(cfg, "evitar_procesados_pct"),
+                      "Penaliza recetas con productos muy procesados (bollería, precocinados, "
+                      "con aditivos…). 0 % = desactivado.")
             + "</div><div class='row'>"
             + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
                    int(cfg.get("tiempo_max_receta_min", 0) or 0),
@@ -1389,6 +1417,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "reutilizacion_pct": float(form.get("reutilizacion_pct", 0)),
                 "salud_pct": float(form.get("salud_pct", 0)),
                 "sobra_pct": float(form.get("sobra_pct", 0)),
+                "evitar_procesados_pct": float(form.get("evitar_procesados_pct", 0)),
                 "tiempo_max_receta_min": int(form.get("tiempo_max_receta_min", 0) or 0),
                 "presupuesto_max_semana": float(form.get("presupuesto_max_semana", 0) or 0),
                 "ingredientes_excluidos": [

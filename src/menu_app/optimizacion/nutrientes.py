@@ -158,7 +158,9 @@ def objetivos_semanales(cfg: ConfigNutricion, num_comensales: int) -> list[Banda
 # PROTEINA de forma pareja entre comidas mejora la sintesis proteica muscular
 # (Mamerow et al. 2014, J Nutr; ~0,4 g/kg por comida). No se controlan por comida
 # los techos de sal/azucar/grasa saturada (importan en el total del dia).
-NUTRIENTES_POR_COMIDA = ("energia_kcal", "proteinas")
+# Se anade FIBRA (#12): repartir la fibra entre comidas ayuda a la saciedad y a
+# alcanzar el objetivo diario (suelo BLANDO, no bloquea si el dato falta).
+NUTRIENTES_POR_COMIDA = ("energia_kcal", "proteinas", "fibra")
 
 
 def escalar_bandas(

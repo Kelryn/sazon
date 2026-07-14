@@ -32,6 +32,9 @@ def _serializar(res: ResultadoMenu, batchcooking: bool = False) -> str:
             "grupo": res.recetas[rid].grupo,
             "por_que": por_que_receta(res.recetas[rid]),  # explicabilidad (#35)
             "nutri": res.recetas[rid].nutri,  # Nutri-Score A-E (#2)
+            # Sal y azucares por racion, para las alertas por comida (#10).
+            "sal": round((res.recetas[rid].nutricion_racion or {}).get("sal", 0.0), 2),
+            "azucares": round((res.recetas[rid].nutricion_racion or {}).get("azucares", 0.0), 1),
         }
         for rid in usadas
         if rid in res.recetas

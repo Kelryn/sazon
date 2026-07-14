@@ -43,6 +43,8 @@ _PESOS_PCT = {
     "salud_pct": ("peso_salud", 8.0, 0),
     # Reducir SOBRAS reales (aprovechar el formato comprado): 0 = desactivado (#23/24).
     "sobra_pct": ("peso_sobra", 3.0, 0),
+    # Evitar ULTRAPROCESADOS (NOVA 4): 0 = desactivado (#3).
+    "evitar_procesados_pct": ("peso_ultraprocesado", 8.0, 0),
 }
 
 
@@ -316,6 +318,7 @@ def generar_menu(
                 if c.raciones else {}
             ),
             nutri=(lambda p: nutri_score(p, _g)[1] if p else "")(c.nutricion_por_100g()),
+            procesado=c.procesado,
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -344,6 +347,7 @@ def generar_menu(
         peso_variedad=float(cfg.get("peso_variedad", 3.0)),
         peso_reutilizacion=peso_interno(cfg, "reutilizacion_pct"),
         peso_salud=peso_salud,
+        peso_ultraprocesado=peso_interno(cfg, "evitar_procesados_pct"),
         peso_sobra=peso_sobra,
         productos_formato=productos_formato,
         max_familia_libre=int(cfg.get("max_comidas_por_familia", 2)),

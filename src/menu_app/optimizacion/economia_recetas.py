@@ -20,6 +20,8 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 
+from .procesado import nivel_procesado
+
 # Nutrientes que manejamos (coinciden con las columnas *_100g de productos).
 NUTRIENTES = [
     "energia_kcal",
@@ -105,6 +107,9 @@ class RecetaCalculada:
     ingredientes_norm: set[str] = field(default_factory=set)
     # Tiempo total de preparacion en minutos (si la fuente lo da; None si no).
     tiempo_total_min: int | None = None
+    # Fraccion 0..1 de los gramos de la receta que provienen de productos
+    # ULTRAPROCESADOS (NOVA 4). 0 = nada ultraprocesado. (#3)
+    procesado: float = 0.0
 
     @property
     def cobertura(self) -> float:
@@ -145,7 +150,11 @@ def _es_opcional(texto: str) -> bool:
 
 
 def _cargar_productos(conn: sqlite3.Connection) -> dict[str, dict]:
-    cols = ", ".join(["retailer_product_id", "precio_por_unidad", "unidad_medida"] + list(_COL_100G.values()))
+    extra = ["categoria", "subcategoria", "ingredientes", "nova"]  # para el nivel de procesado (#3)
+    cols = ", ".join(
+        ["retailer_product_id", "precio_por_unidad", "unidad_medida"]
+        + list(_COL_100G.values()) + extra
+    )
     cur = conn.execute(f"SELECT {cols} FROM productos WHERE apto_receta = 1")
     return {r["retailer_product_id"]: dict(r) for r in cur.fetchall()}
 
@@ -182,6 +191,7 @@ def calcular_receta(
     ingrediente_principal = None
     productos_usados: set[str] = set()
     productos_gramos: dict[str, float] = {}
+    gramos_ultra = 0.0
     ingredientes_norm: set[str] = set()
 
     for ing in ingredientes:
@@ -214,6 +224,8 @@ def calcular_receta(
             continue  # producto conocido pero sin cantidad ni peso por pieza -> no se prorratea
 
         productos_gramos[rid] = productos_gramos.get(rid, 0.0) + cantidad  # para la sobra (#23)
+        if nivel_procesado(prod) >= 4:  # gramos ultraprocesados (#3)
+            gramos_ultra += cantidad
 
         # Coste del ingrediente.
         precio_u = prod["precio_por_unidad"]
@@ -245,6 +257,8 @@ def calcular_receta(
         productos=productos_usados,
         productos_gramos=productos_gramos,
         ingredientes_norm=ingredientes_norm,
+        procesado=(gramos_ultra / sum(productos_gramos.values())
+                   if productos_gramos else 0.0),
         tiempo_total_min=(cab["tiempo_total_min"] if cab else None),
         n_ingredientes=len(ingredientes),
         n_costeados=costeados,
