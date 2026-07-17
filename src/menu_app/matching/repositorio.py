@@ -66,3 +66,28 @@ class MatchingRepository:
         return self.conn.execute(
             "SELECT COUNT(*) AS n FROM mapeo_ingr_producto WHERE retailer_product_id IS NOT NULL"
         ).fetchone()["n"]
+
+    def sin_match(self, limite: int = 200) -> list[str]:
+        """Ingredientes normalizados SIN producto casado (cola de correcciones, #13)."""
+        cur = self.conn.execute(
+            "SELECT ingrediente_norm FROM mapeo_ingr_producto "
+            "WHERE retailer_product_id IS NULL ORDER BY ingrediente_norm LIMIT ?",
+            (limite,),
+        )
+        return [r["ingrediente_norm"] for r in cur.fetchall()]
+
+    def asignar_producto(self, ingrediente_norm: str, rid: str, fecha: str) -> bool:
+        """Asigna A MANO un producto a un ingrediente (correccion del usuario, #13/#14).
+        Devuelve False si el producto no existe."""
+        prod = self.conn.execute(
+            "SELECT nombre FROM productos WHERE retailer_product_id = ?", (rid,)
+        ).fetchone()
+        if prod is None:
+            return False
+        self.conn.execute(
+            "UPDATE mapeo_ingr_producto SET retailer_product_id=?, producto_nombre=?, "
+            "score=100.0, metodo='manual', fecha=? WHERE ingrediente_norm=?",
+            (rid, prod["nombre"], fecha, ingrediente_norm),
+        )
+        self.conn.commit()
+        return True

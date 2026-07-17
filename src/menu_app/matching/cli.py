@@ -61,6 +61,9 @@ def main(
     almac_cfg = cfg.get("almacenamiento", {}) or {}
     ia_cfg = cfg.get("ia", {}) or {}
     db_path = db_path or Path(almac_cfg.get("db_path", "data/menu.db"))
+    # Umbral fuzzy configurable (#21): si no se pasa --umbral, usa el de config.yaml.
+    if umbral == UMBRAL_LEXICO and "matching_umbral_fuzzy" in cfg:
+        umbral = float(cfg["matching_umbral_fuzzy"])
 
     proveedor = ia_cfg.get("proveedor", "gemini")
     intervalo_llm = float(ia_cfg.get("min_request_interval_seconds", 4.0))

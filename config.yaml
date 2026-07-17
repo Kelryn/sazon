@@ -31,6 +31,8 @@ nutrientes_por_comida: true             # controla energia+proteina en CADA comi
 cobertura_minima: 0.7                   # % minimo de ingredientes de la receta con producto
                                         # en Alcampo para usarla (y el principal siempre debe
                                         # tener producto)
+matching_umbral_fuzzy: 80               # umbral de similitud lexica 0-100 para el respaldo
+                                        # fuzzy del matcher (#21). Mas bajo = mas permisivo.
 exigir_todos_ingredientes: true         # si true, EXCLUYE la receta si le falta cualquier
                                         # ingrediente NO opcional en Alcampo (se detecta
                                         # 'opcional', 'al gusto', 'para decorar'...)

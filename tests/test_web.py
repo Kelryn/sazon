@@ -64,6 +64,14 @@ def test_actualizaciones_solo_boton(client, monkeypatch):
     assert "última versión" in r2.text
 
 
+def test_matching_correcciones(client):
+    r = client.get("/matching")
+    assert r.status_code == 200
+    assert "Correcciones de matching" in r.text
+    # Buscar producto para un ingrediente concreto no rompe.
+    assert client.get("/matching?ing=azafran").status_code == 200
+
+
 def test_carrito_enviar_sin_plan_no_rompe(client):
     # Sin plan, la ruta redirige a /compra con un mensaje y NO abre navegador.
     r = client.post("/carrito/enviar", follow_redirects=True)

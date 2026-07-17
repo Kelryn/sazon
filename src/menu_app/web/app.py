@@ -41,6 +41,7 @@ from ..optimizacion.exportar import (
 )
 from ..optimizacion.economia_recetas import _FACTOR_PRECIO, _gramos_por_piezas
 from ..optimizacion.economia_recetas import invalidar_cache as invalidar_cache_recetas
+from ..matching.repositorio import MatchingRepository
 from ..optimizacion.nutrientes import objetivos_semanales
 from ..optimizacion.planes import asignar_dias, cargar_plan, generar_plan, regenerar_semana
 from ..optimizacion.servicio import _PESOS_PCT, config_nutricion, peso_interno
@@ -149,7 +150,7 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
 <header><a href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG.replace('<svg', '<svg class="logo"', 1)}</a>
 <nav><a href="/">Menú</a><a href="/compra">Lista de la compra</a>
 <a href="/recetas">Recetas</a><a href="/catalogo">Catálogo</a>
-<a href="/config">Configuración</a></nav></header>
+<a href="/matching">Correcciones</a><a href="/config">Configuración</a></nav></header>
 <main>{cuerpo}</main></body></html>"""
 
 
@@ -851,6 +852,77 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             f"el formato del paquete.</p></div>"
         )
         return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None)
+
+    # --- Cola de correcciones de matching (#13/#14): asignar producto a mano ---
+    @app.get("/matching", response_class=HTMLResponse)
+    def matching_page(ing: str = "", q: str = "", msg: str = ""):
+        conn, _ = _conn()
+        try:
+            repo = MatchingRepository(conn)
+            total, con = repo.contar_mapeos(), repo.contar_con_match()
+            aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
+            cab = (
+                '<div class="card"><div class="franja">Correcciones de matching</div>'
+                f'<p class="meta">Emparejados <b>{con}</b>/{total} · '
+                f"sin producto: <b>{total - con}</b>. Asigna a mano los que falten para que "
+                "el menú pueda usar esas recetas.</p></div>"
+            )
+            if ing:
+                # Buscar productos candidatos para el ingrediente `ing`.
+                like = f"%{q.strip().lower()}%" if q.strip() else f"%{ing.split()[0]}%"
+                prods = conn.execute(
+                    "SELECT retailer_product_id, nombre, marca, precio_eur FROM productos "
+                    "WHERE apto_receta=1 AND lower(nombre) LIKE ? ORDER BY precio_por_unidad "
+                    "LIMIT 40", (like,),
+                ).fetchall()
+                filas = "".join(
+                    f'<tr><td>{html.escape(p["nombre"])}<br>'
+                    f'<span class="meta">{html.escape(p["marca"] or "")} · '
+                    f'{("%.2f €" % p["precio_eur"]) if p["precio_eur"] is not None else "—"}</span></td>'
+                    f'<td style="text-align:right"><form method="post" action="/matching/asignar">'
+                    f'<input type="hidden" name="ing" value="{html.escape(ing)}">'
+                    f'<input type="hidden" name="rid" value="{html.escape(p["retailer_product_id"])}">'
+                    f'<button class="btn mini" type="submit">Asignar</button></form></td></tr>'
+                    for p in prods
+                ) or '<tr><td colspan="2">Sin resultados. Prueba otro término.</td></tr>'
+                cuerpo = (
+                    aviso + cab
+                    + f'<div class="card"><div class="franja">Asignar producto a «{html.escape(ing)}»</div>'
+                    '<form method="get" action="/matching">'
+                    f'<input type="hidden" name="ing" value="{html.escape(ing)}">'
+                    f'<input name="q" value="{html.escape(q)}" placeholder="buscar producto…" '
+                    'style="max-width:320px"> <button class="btn sec" type="submit">Buscar</button>'
+                    ' <a class="btn sec" href="/matching">← volver a la lista</a></form>'
+                    f"<table>{filas}</table></div>"
+                )
+                return _pagina("Correcciones", cuerpo)
+            # Lista de ingredientes sin match.
+            faltan = repo.sin_match(limite=200)
+            filas = "".join(
+                f'<tr><td>{html.escape(i)}</td>'
+                f'<td style="text-align:right"><a class="btn mini" '
+                f'href="/matching?ing={html.escape(i)}">Buscar producto…</a></td></tr>'
+                for i in faltan
+            ) or '<tr><td colspan="2">🎉 No hay ingredientes sin emparejar.</td></tr>'
+            cuerpo = aviso + cab + f'<div class="card"><table>{filas}</table></div>'
+            return _pagina("Correcciones", cuerpo)
+        finally:
+            conn.close()
+
+    @app.post("/matching/asignar")
+    async def matching_asignar(ing: str = Form(""), rid: str = Form("")):
+        from datetime import datetime, timezone
+
+        conn, _ = _conn()
+        try:
+            ok = MatchingRepository(conn).asignar_producto(
+                ing.strip(), rid.strip(), datetime.now(timezone.utc).isoformat(timespec="seconds")
+            )
+        finally:
+            conn.close()
+        invalidar_cache_recetas()  # el mapeo cambio -> recalcular coste/nutricion
+        msg = f"«{ing}» asignado." if ok else "No se pudo asignar (producto no encontrado)."
+        return RedirectResponse(f"/matching?msg={quote(msg)}", status_code=303)
 
     @app.post("/carrito/enviar")
     def carrito_enviar():
