@@ -19,619 +19,66 @@ from __future__ import annotations
 import html
 import json
 import threading
-from collections import deque
+from datetime import UTC
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from ..actualizaciones import (
-    _es_ejecutable_congelado,
-    hay_actualizacion,
-    instalar,
-    pre_descargar,
-)
-from ..backups import crear_backup, listar_backups, restaurar_backup
-from ..telemetria import leer_ultimos_errores, limpiar_log, registrar_error
-from ..carrito import (
-    anadir_al_carrito,
-    chromium_instalado,
-    instalar_chromium,
-    playwright_disponible,
-)
-from ..almacenamiento.actualizar import actualizar_catalogo
+from ..actualizaciones import hay_actualizacion, instalar
 from ..almacenamiento.db import get_connection, init_db
-from ..version import __version__
-from ..ingesta.categories import FOOD_CATEGORY_ROOTS
+from ..backups import crear_backup, listar_backups, restaurar_backup
+from ..carrito import chromium_instalado, playwright_disponible
 from ..configuracion import DIAS_SEMANA, cargar_config, guardar_overlay, ruta_overlay
+from ..ingesta.categories import FOOD_CATEGORY_ROOTS
+from ..matching.repositorio import MatchingRepository
 from ..optimizacion.compra import lista_compra
 from ..optimizacion.desayunos import sugerir_desayunos
+from ..optimizacion.economia_recetas import _FACTOR_PRECIO, _gramos_por_piezas
+from ..optimizacion.economia_recetas import invalidar_cache as invalidar_cache_recetas
 from ..optimizacion.exportar import (
     compra_a_csv,
     compra_a_pdf,
     menu_a_csv,
     menu_a_pdf,
 )
-from ..optimizacion.economia_recetas import _FACTOR_PRECIO, _gramos_por_piezas
-from ..optimizacion.economia_recetas import invalidar_cache as invalidar_cache_recetas
-from ..matching.repositorio import MatchingRepository
-from ..optimizacion.nutrientes import objetivos_semanales
-from ..optimizacion.planes import asignar_dias, cargar_plan, generar_plan, regenerar_semana
-from ..optimizacion.servicio import _PESOS_PCT, config_nutricion, peso_interno
-from ..recetas.catalogo_ingredientes import ingredientes_catalogo, nutrientes_receta
-from ..recetas.tags import generar_tags
-from ..recetas.utensilios import detectar_utensilios
+from ..optimizacion.planes import cargar_plan, generar_plan, regenerar_semana
+from ..recetas.catalogo_ingredientes import ingredientes_catalogo
 from ..recetas.manual import (
-    UNIDADES,
     cargar_receta,
     eliminar_receta,
     guardar_receta,
     listar_recetas,
+    marcar_favorita,
 )
-import dataclasses
-
-
-def _pct(cfg: dict, clave_pct: str) -> float:
-    """Valor 0-100 actual de un peso (desde la clave nueva, la antigua o el defecto)."""
-    _antigua, maximo, _def = _PESOS_PCT[clave_pct]
-    return round(peso_interno(cfg, clave_pct) / maximo * 100)
-from ..recetas.manual import listar_favoritas, marcar_favorita
-from .marca import ESLOGAN, LOGO_SVG, NOMBRE, TEMA_SCRIPT, TOKENS_CSS, favicon_data_uri
-
-_NOMBRE_DIA = {
-    "lun": "Lunes", "mar": "Martes", "mie": "Miércoles", "jue": "Jueves",
-    "vie": "Viernes", "sab": "Sábado", "dom": "Domingo",
-}
-
-# Nombres "bonitos" de los nutrientes, en el orden pedido por el usuario.
-# 'grasas' del catalogo son grasas TOTALES: se muestran como insaturadas
-# restando las saturadas.
-_ORDEN_NUTRIENTES = [
-    ("energia_kcal", "Energía (Kcal)", "kcal"),
-    ("proteinas", "Proteínas", "g"),
-    ("hidratos", "Hidratos de Carbono", "g"),
-    ("grasas_insat", "Grasas insaturadas", "g"),
-    ("grasas_sat", "Grasas saturadas", "g"),
-    ("azucares", "Azúcares", "g"),
-    ("sal", "Sal", "g"),
-    ("fibra", "Fibra", "g"),
-]
-
-_ESTILO = (
-    TOKENS_CSS
-    + """
-:root { color-scheme: light dark; }
-* { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0;
-  background: var(--bg); color: var(--text); }
-header { background: linear-gradient(100deg, var(--verde-osc), var(--verde)); color: #fff;
-  padding: 12px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  box-shadow: 0 2px 10px rgba(30,60,40,.15); }
-header .logo { height: 34px; }
-header nav { display: flex; gap: 16px; flex-wrap: wrap; }
-header a { color: rgba(255,255,255,.92); text-decoration: none; font-weight: 600; font-size: 14px; }
-header a:hover { color: #fff; text-decoration: underline; }
-main { max-width: 980px; margin: 0 auto; padding: 22px 20px; }
-.card { background: var(--surface); border-radius: var(--radio); padding: 18px 20px;
-  margin-bottom: 18px; box-shadow: var(--shadow); border: 1px solid var(--border); }
-.franja { font-weight: 700; color: var(--verde-osc); margin: 12px 0 6px; font-size: 15px; }
-.fav { color: var(--dorado); font-weight: 700; }
-.chip { display: inline-block; background: var(--chip-bg); color: var(--chip-text);
-  border-radius: 20px; padding: 2px 10px; font-size: 12px; margin: 2px 2px; white-space: nowrap; }
-.meta { color: var(--muted); font-size: 13px; }
-.note { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
-.ok { color: var(--verde); } .warn { color: var(--terracota); font-weight: 600; }
-.btn { display: inline-block; background: var(--verde); color: #fff; border: 0;
-  padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-  text-decoration: none; transition: filter .15s; }
-.btn:hover { filter: brightness(1.06); }
-.btn.sec { background: #6b7169; } .btn.mini { padding: 3px 10px; font-size: 12px; font-weight: 600; }
-input, textarea, select { width: 100%; padding: 9px; border: 1px solid var(--border);
-  border-radius: 8px; font: inherit; background: var(--surface); color: var(--text); }
-input[type=range] { padding: 0; accent-color: var(--verde); }
-input[type=checkbox] { width: auto; accent-color: var(--verde); }
-label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 14px; }
-.row { display: flex; gap: 14px; flex-wrap: wrap; }
-.row > div { flex: 1; min-width: 150px; }
-.big { font-size: 22px; font-weight: 700; }
-a.receta { color: inherit; text-decoration: underline; text-decoration-color: var(--verde); }
-.arrows { display: inline-flex; gap: 8px; align-items: center; margin-left: 10px; }
-.arrows a, .arrows span.off { padding: 2px 11px; border-radius: 7px; background: var(--verde);
-  color: #fff; text-decoration: none; font-weight: 700; }
-.arrows span.off { background: #b6bbb4; }
-.ticket { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;
-  max-width: 560px; margin: 0 auto; border: 1px dashed var(--muted); padding: 18px 16px;
-  background: var(--surface); color: var(--text); }
-.ticket h2 { text-align: center; margin: 0 0 2px; font-size: 16px; letter-spacing: 2px; color: var(--verde-osc); }
-.ticket .cab { text-align: center; margin: 0 0 10px; }
-.ticket table { font-size: 12px; } .ticket td, .ticket th { padding: 3px 4px;
-  border-bottom: 1px dotted var(--border); text-transform: none; letter-spacing: 0; }
-.ticket .total { font-size: 15px; font-weight: 800; text-align: right; padding-top: 8px; }
-pre.log { background: #111; color: #9f9; padding: 10px; border-radius: 8px;
-  font-size: 12px; max-height: 320px; overflow: auto; }
-/* Enlace "saltar al contenido" (#70), oculto salvo con foco de teclado. */
-.skip-link { position: absolute; left: -9999px; top: 0; background: var(--verde);
-  color: #fff; padding: 8px 14px; border-radius: 0 0 8px 0; z-index: 100; }
-.skip-link:focus { left: 0; }
-/* Vista de impresion (#68): sin cabecera/nav/botones, fondo blanco, sin sombras. */
-@media print {
-  header nav, form, .btn, .arrows a[href], .off { display: none !important; }
-  body { background: #fff !important; }
-  .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
-  a[href]:after { content: "" !important; }
-}
-"""
+from ..recetas.tags import generar_tags
+from ..recetas.utensilios import detectar_utensilios
+from ..telemetria import leer_ultimos_errores, limpiar_log, registrar_error
+from ..version import __version__
+from .marca import NOMBRE
+from .plantillas import (
+    _NOMBRE_DIA,
+    _banner_hoy,
+    _barras_nutrientes,
+    _editor_html,
+    _fila_nutrientes,
+    _link_receta,
+    _pagina,
+    _pct,
+    _tabla_dias,
 )
-
-
-def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
-    meta = f'<meta http-equiv="refresh" content="{refrescar}">' if refrescar else ""
-    return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">{meta}
-<link rel="icon" href="{favicon_data_uri()}">
-<title>{html.escape(titulo)} · {NOMBRE}</title><style>{_ESTILO}</style>{TEMA_SCRIPT}</head><body>
-<a href="#contenido" class="skip-link">Saltar al contenido</a>
-<header><a href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG.replace('<svg', '<svg class="logo"', 1)}</a>
-<nav><a href="/">Menú</a><a href="/compra">Lista de la compra</a>
-<a href="/recetas">Recetas</a><a href="/catalogo">Catálogo</a>
-<a href="/buscar">Buscar</a><a href="/matching">Correcciones</a>
-<a href="/dashboard">Dashboard</a><a href="/config">Configuración</a>
-<button class="btn mini sec" type="button" onclick="alternarTema()" title="Cambiar tema claro/oscuro" aria-label="Cambiar entre tema claro y oscuro" style="margin-left:6px">🌓</button>
-</nav></header>
-<main id="contenido">{cuerpo}</main></body></html>"""
-
-
-# ------------------------- tarea de catalogo en 2º plano -------------------------
-
-_CATALOGO = {"activa": False, "log": deque(maxlen=300), "resumen": ""}
-
-# Estado del envio de la compra al carrito de Alcampo (en 2º plano).
-_CARRITO = {"activa": False, "log": deque(maxlen=400), "resumen": ""}
-# Instalacion bajo demanda de Chromium (#78): navegador de respaldo si no hay Chrome/Edge.
-_CHROMIUM = {"instalando": False, "log": deque(maxlen=200), "resumen": ""}
-
-
-def _lanzar_instalar_chromium() -> bool:
-    if _CHROMIUM["instalando"]:
-        return False
-    _CHROMIUM["instalando"] = True
-    _CHROMIUM["log"].clear()
-    _CHROMIUM["resumen"] = ""
-
-    def _correr():
-        try:
-            ok, msg = instalar_chromium(log=_CHROMIUM["log"].append)
-            _CHROMIUM["resumen"] = msg
-        except Exception as e:  # noqa: BLE001
-            _CHROMIUM["resumen"] = f"Error: {e}"
-        finally:
-            _CHROMIUM["instalando"] = False
-
-    threading.Thread(target=_correr, daemon=True).start()
-    return True
-
-# Estado de la comprobacion de actualizaciones (Fase 11): None = sin comprobar,
-# False = comprobado y al dia, InfoActualizacion = hay version nueva.
-# "descarga": ruta ya predescargada en 2º plano (#75), o None si aun no.
-_ACTUALIZACION = {"estado": None, "comprobado": False, "descarga": None, "descargando": False}
-
-
-def _comprobar_actualizacion(canal: str = "estable") -> None:
-    """Consulta GitHub (una vez, repo fijo) y guarda el resultado en cache. Si hay
-    version nueva, lanza la PRE-DESCARGA en 2º plano (#75): asi "Instalar" es
-    instantaneo despues (no espera a bajar el fichero)."""
-    info = hay_actualizacion(canal=canal)
-    _ACTUALIZACION["estado"] = info
-    _ACTUALIZACION["comprobado"] = True
-    if info and info.es_instalador and _es_ejecutable_congelado():
-        def _predescargar():
-            _ACTUALIZACION["descargando"] = True
-            try:
-                _ACTUALIZACION["descarga"] = pre_descargar(info)
-            except Exception:  # noqa: BLE001 - se reintenta al pulsar "Instalar"
-                pass
-            finally:
-                _ACTUALIZACION["descargando"] = False
-        threading.Thread(target=_predescargar, daemon=True).start()
-
-
-def _banner_actualizacion() -> str:
-    """Banner (en todas las paginas) si hay una version nueva disponible, con el
-    changelog de la release visible (#76) y el estado de la pre-descarga (#75)."""
-    info = _ACTUALIZACION["estado"]
-    if not info:
-        return ""
-    estado_descarga = (
-        " (descargando en 2º plano…)" if _ACTUALIZACION["descargando"]
-        else " (lista para instalar)" if _ACTUALIZACION["descarga"] else ""
-    )
-    changelog = (
-        f'<details style="margin-top:6px"><summary class="meta">Ver novedades</summary>'
-        f'<pre class="log" style="white-space:pre-wrap">{html.escape(info.notas[:2000])}</pre></details>'
-        if info.notas else ""
-    )
-    beta = ' <span class="chip">beta</span>' if info.es_beta else ""
-    return (
-        f'<div class="card" style="border-left:4px solid var(--dorado)">'
-        f'✨ <b>Nueva versión disponible: {html.escape(info.version)}</b>{beta} '
-        f'(tienes la {__version__}){estado_descarga}. '
-        f'<form method="post" action="/actualizaciones/comprobar" style="display:inline">'
-        f'<button class="btn mini" type="submit">Instalar</button></form>'
-        f"{changelog}</div>"
-    )
-
-
-def _lanzar_actualizacion(cfg: dict, categorias: list[str] | None = None) -> bool:
-    if _CATALOGO["activa"]:
-        return False
-    _CATALOGO["activa"] = True
-    _CATALOGO["log"].clear()
-    _CATALOGO["resumen"] = ""
-
-    def _correr():
-        try:
-            resumen = actualizar_catalogo(
-                cfg, progreso=_CATALOGO["log"].append, categorias=categorias
-            )
-            invalidar_cache_recetas()  # precios nuevos -> recalcular coste de recetas (#34)
-            _CATALOGO["resumen"] = (
-                f"Catálogo actualizado: {resumen['procesados']} productos, "
-                f"{resumen['nuevos']} nuevos, {resumen['cambios_precio']} cambios de precio."
-            )
-        except Exception as e:  # noqa: BLE001 - se muestra al usuario
-            _CATALOGO["log"].append(f"ERROR: {e}")
-            _CATALOGO["resumen"] = f"Falló la actualización: {e}"
-        finally:
-            _CATALOGO["activa"] = False
-
-    threading.Thread(target=_correr, daemon=True).start()
-    return True
-
-
-def _lanzar_carrito(config_path, sincronizar: bool = False, vaciar_antes: bool = False) -> tuple[bool, str]:
-    """Envia la compra del plan al carrito de Alcampo en 2º plano (abre el navegador)."""
-    if _CARRITO["activa"]:
-        return False, "Ya hay un envío en marcha."
-    if not playwright_disponible():
-        return False, (
-            "Falta el navegador automatizado. Instálalo una vez: "
-            "uv sync --extra playwright && uv run playwright install chromium"
-        )
-    cfg = cargar_config(config_path)
-    db = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
-    conn = get_connection(db)
-    init_db(conn)
-    compra = lista_compra(conn, despensa=cfg.get("despensa"))
-    conn.close()
-    if not compra.lineas:
-        return False, "El plan no tiene lista de la compra (genera antes un menú)."
-
-    _CARRITO["activa"] = True
-    _CARRITO["log"].clear()
-    _CARRITO["resumen"] = ""
-    lineas = list(compra.lineas)
-
-    def _correr():
-        try:
-            res = anadir_al_carrito(
-                lineas, dry_run=False, headless=False, log=_CARRITO["log"].append,
-                sincronizar=sincronizar, vaciar_antes=vaciar_antes,
-            )
-            _CARRITO["resumen"] = (
-                f"Enviados {res.n_ok}/{len(res.lineas)} productos al carrito. "
-                f"Total de la cesta: {res.total_cesta or '—'}."
-            )
-        except Exception as e:  # noqa: BLE001 - se muestra al usuario
-            _CARRITO["log"].append(f"ERROR: {e}")
-            _CARRITO["resumen"] = f"Falló el envío: {e}"
-        finally:
-            _CARRITO["activa"] = False
-
-    threading.Thread(target=_correr, daemon=True).start()
-    return True, "Enviando la compra a Alcampo. Inicia sesión en la ventana que se abre."
-
-
-# ------------------------------- render del menu -------------------------------
-
-
-def _fila_nutrientes(datos: dict, cfg: dict) -> str:
-    """Tabla de nutrientes POR PERSONA Y DIA (total/dia y objetivo/dia)."""
-    dias = int(datos.get("dias", 7))
-    tot = datos.get("nutricion_total", {}) or {}
-    num_com = int(datos.get("num_comensales", 2))
-    cfg_nut = config_nutricion(cfg)
-    bandas = {b.nutriente: b for b in objetivos_semanales(cfg_nut, num_com)}
-    div = dias * num_com  # de total del menu a "por persona y dia"
-
-    valores = dict(tot)
-    valores["grasas_insat"] = max(0.0, tot.get("grasas", 0.0) - tot.get("grasas_sat", 0.0))
-
-    filas = ""
-    for clave, nombre, unidad in _ORDEN_NUTRIENTES:
-        val_dia = valores.get(clave, 0.0) / div
-        if clave == "energia_kcal":
-            # Objetivo directamente desde la config del usuario: sus kcal diarias por
-            # la fraccion del dia que cubre el menu, ± la tolerancia.
-            centro = cfg_nut.kcal_por_comensal_dia * cfg_nut.fraccion_menu
-            mas_menos = centro * cfg_nut.energia_tolerancia
-            objetivo = f"{centro:.0f} ± {mas_menos:.0f}"
-            en_banda = centro - mas_menos - 0.5 <= val_dia <= centro + mas_menos + 0.5
-        elif clave == "grasas_insat":
-            bg, bs = bandas.get("grasas"), bandas.get("grasas_sat")
-            lo = max(0.0, (bg.minimo or 0) - (bs.maximo or 0)) / div if bg else 0
-            hi = (bg.maximo or 0) / div if bg else 0
-            objetivo = f"{lo:.0f}..{hi:.0f}"
-            en_banda = lo - 0.5 <= val_dia <= hi + 0.5
-        else:
-            b = bandas.get(clave)
-            lo = f"{b.minimo / div:.0f}" if b and b.minimo is not None else "—"
-            hi = f"{b.maximo / div:.0f}" if b and b.maximo is not None else "—"
-            objetivo = f"{lo}..{hi}"
-            en_banda = True
-            if b and b.minimo is not None and val_dia < b.minimo / div - 0.5:
-                en_banda = False
-            if b and b.maximo is not None and val_dia > b.maximo / div + 0.5:
-                en_banda = False
-        estado = '<span class="ok">✓</span>' if en_banda else '<span class="warn">✗</span>'
-        filas += (
-            f"<tr><td>{nombre}</td><td>{val_dia:.0f} {unidad}</td>"
-            f"<td class='meta'>{objetivo} {unidad}</td><td>{estado}</td></tr>"
-        )
-    frac = cfg_nut.fraccion_menu
-    return (
-        f'<div class="card"><div class="franja">Nutrientes por persona y día '
-        f"(comida + cena)</div>"
-        f"<table><tr><th>Nutriente</th><th>Total/día</th><th>Objetivo/día</th><th></th></tr>"
-        f"{filas}</table>"
-        f'<p class="meta">Objetivos escalados a lo que cubre el menú: el {frac * 100:.0f}% de '
-        f"la energía del día (comida {cfg_nut.pct_comida * 100:.0f}% + cena "
-        f"{cfg_nut.pct_cena * 100:.0f}%, reparto recomendado FEN/AESAN). Con "
-        f"{cfg_nut.kcal_por_comensal_dia:.0f} kcal/día configuradas, comida+cena deben aportar "
-        f"{cfg_nut.kcal_por_comensal_dia * frac:.0f} kcal.</p></div>"
-    )
-
-
-_NUTRI_COLOR = {"A": "#038141", "B": "#85bb2f", "C": "#fecb02", "D": "#ee8100", "E": "#e63e11"}
-
-
-def _badge_nutri(letra: str) -> str:
-    """Distintivo Nutri-Score (A verde ... E rojo)."""
-    if not letra or letra not in _NUTRI_COLOR:
-        return ""
-    return (
-        f'<span title="Nutri-Score {letra} (estimado)" style="display:inline-block;'
-        f"min-width:16px;text-align:center;background:{_NUTRI_COLOR[letra]};color:#fff;"
-        f'font-weight:800;border-radius:4px;padding:0 4px;font-size:11px">{letra}</span>'
-    )
-
-
-def _link_receta(rid: str, info: dict, raciones: float | None = None) -> str:
-    fav = ' <span class="fav">★</span>' if info.get("es_favorita") else ""
-    nutri = " " + _badge_nutri(info.get("nutri", "")) if info.get("nutri") else ""
-    rac = f' <span class="meta">({raciones:.2g} rac/pers.)</span>' if raciones else ""
-    # Explicabilidad (#35): por que entro esta receta -> tooltip al pasar el raton.
-    porque = info.get("por_que", "")
-    title = f' title="{html.escape(porque)}"' if porque else ""
-    marca = ' <span class="meta" title="' + html.escape(porque) + '">ⓘ</span>' if porque else ""
-    return (
-        f'<a class="receta" href="/receta/{html.escape(rid)}"{title}>'
-        f'{html.escape(info.get("titulo", rid))}</a>{fav}{nutri}{rac}{marca}'
-    )
-
-
-# Umbrales de alerta POR COMILA y persona (#10): OMS sal <5 g/día, azúcares libres
-# <~50 g/día -> por comida (2 comidas grandes) avisamos por encima de estos.
-_SAL_ALERTA_COMIDA = 2.5   # g de sal por comida y persona
-_AZUCAR_ALERTA_COMIDA = 25  # g de azúcares por comida y persona
-
-
-def _alerta_comida(info: dict, raciones: float) -> str:
-    """Icono de aviso si una comida se pasa de sal o azúcar (por persona) (#10)."""
-    sal = (info.get("sal", 0) or 0) * raciones
-    azu = (info.get("azucares", 0) or 0) * raciones
-    avisos = []
-    if sal > _SAL_ALERTA_COMIDA:
-        avisos.append(f"sal alta ({sal:.1f} g)")
-    if azu > _AZUCAR_ALERTA_COMIDA:
-        avisos.append(f"azúcar alto ({azu:.0f} g)")
-    if not avisos:
-        return ""
-    return (
-        f' <span title="{html.escape("; ".join(avisos))}" '
-        f'style="cursor:help">⚠️</span>'
-    )
-
-
-def _tabla_dias(datos: dict) -> str:
-    info = datos.get("recetas_info", {}) or {}
-    raciones = datos.get("raciones", {}) or {}
-    sel_com = datos.get("seleccion_comida", {}) or {}
-    sel_cen = datos.get("seleccion_cena", {}) or {}
-
-    def _t(rid):
-        if not rid:
-            return "—"
-        n_usos = (sel_com.get(rid, 0) or 0) + (sel_cen.get(rid, 0) or 0)
-        x = raciones.get(rid)
-        por_comida = (x / n_usos) if (x and n_usos) else None
-        enlace = _link_receta(rid, info.get(rid, {}), por_comida)
-        return enlace + _alerta_comida(info.get(rid, {}), por_comida or 1.0)
-
-    filas = ""
-    for dia, comida, cena, es_bc in asignar_dias(datos, DIAS_SEMANA):
-        etiqueta = ' <span class="meta">🍱 plato único</span>' if es_bc else ""
-        filas += (
-            f"<tr><td><b>{_NOMBRE_DIA.get(dia, dia)}</b>{etiqueta}</td>"
-            f"<td>{_t(comida)}</td><td>{_t(cena)}</td></tr>"
-        )
-    tabla = f"<table><tr><th>Día</th><th>🌞 Comida</th><th>🌙 Cena</th></tr>{filas}</table>"
-    return tabla + _resumen_grupos(datos)
-
-
-def _banner_hoy(datos: dict) -> str:
-    """Recordatorio "hoy toca" (#67): busca, dentro de la semana MOSTRADA, el dia
-    cuyo nombre coincide con el de hoy (lun..dom) y muestra que hay para comer.
-    No conoce fechas reales del plan (las semanas son abstractas lun..dom); es un
-    recordatorio por dia de la semana, no por fecha exacta."""
-    import datetime
-
-    info = datos.get("recetas_info", {}) or {}
-    hoy = DIAS_SEMANA[datetime.date.today().weekday()]
-    for dia, comida, cena, es_bc in asignar_dias(datos, DIAS_SEMANA):
-        if dia != hoy:
-            continue
-        partes = []
-        if comida:
-            partes.append(f"comida: {html.escape(info.get(comida, {}).get('titulo', comida))}")
-        if cena:
-            partes.append(f"cena: {html.escape(info.get(cena, {}).get('titulo', cena))}")
-        if not partes:
-            return ""
-        etiqueta = " 🍱 (plato único)" if es_bc else ""
-        return (
-            '<div class="card" style="border-left:4px solid var(--dorado)">'
-            f"📅 <b>Hoy ({_NOMBRE_DIA.get(hoy, hoy)}) toca{etiqueta}:</b> "
-            + " · ".join(partes) + "</div>"
-        )
-    return ""
-
-
-_NOMBRE_GRUPO = {
-    "verdura": "🥦 Verdura", "legumbre": "🫘 Legumbre", "pescado": "🐟 Pescado",
-    "carne_roja": "🥩 Carne roja", "carne_blanca": "🍗 Carne blanca", "cereal": "🌾 Cereal",
-    "huevo": "🥚 Huevo", "fruta": "🍎 Fruta", "lacteo": "🧀 Lácteo", "otro": "· Otro",
-}
-
-
-def _resumen_grupos(datos: dict) -> str:
-    """Cuenta las comidas de la semana por grupo de alimento (equilibrio AESAN)."""
-    info = datos.get("recetas_info", {}) or {}
-    sel_com = datos.get("seleccion_comida", {}) or {}
-    sel_cen = datos.get("seleccion_cena", {}) or {}
-    cuenta: dict[str, int] = {}
-    for sel in (sel_com, sel_cen):
-        for rid, n in sel.items():
-            g = info.get(rid, {}).get("grupo", "otro")
-            cuenta[g] = cuenta.get(g, 0) + int(n)
-    if not cuenta:
-        return ""
-    chips = " ".join(
-        f'<span class="chip">{_NOMBRE_GRUPO.get(g, g)}: {n}</span>'
-        for g, n in sorted(cuenta.items(), key=lambda x: -x[1])
-    )
-    return f'<p class="meta" style="margin-top:8px">Equilibrio semanal: {chips}</p>'
-
-
-def _editor_html(datos: dict | None, catalogo: list[str]) -> str:
-    """Formulario de crear/editar receta con filas de ingredientes dinamicas."""
-    es_edicion = datos is not None
-    titulo = html.escape(datos["titulo"]) if es_edicion else ""
-    raciones = datos["raciones"] if es_edicion else 4
-    rid = html.escape(datos["id"]) if es_edicion else ""
-    ings = datos["ingredientes"] if es_edicion else [{"nombre": "", "cantidad": "", "unidad": "g"}]
-
-    opciones_unidad = "".join(f'<option value="{u}">{u}</option>' for u in UNIDADES)
-    datalist = "".join(f"<option>{html.escape(n)}</option>" for n in catalogo)
-
-    def _fila(ing):
-        nombre = html.escape(str(ing.get("nombre", "")))
-        cant = html.escape(str(ing.get("cantidad", "") or ""))
-        uni = ing.get("unidad", "g")
-        ops = "".join(
-            f'<option value="{u}"{" selected" if u == uni else ""}>{u}</option>' for u in UNIDADES
-        )
-        return (
-            '<div class="ing-fila" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">'
-            f'<input name="ing_nombre" list="catalogo_ing" value="{nombre}" '
-            'placeholder="Ingrediente del catálogo…" style="flex:3">'
-            f'<input name="ing_cantidad" value="{cant}" inputmode="decimal" '
-            'pattern="[0-9]*[.,]?[0-9]*" placeholder="cant." style="flex:1" '
-            "oninput=\"this.value=this.value.replace(/[^0-9.,]/g,'')\">"
-            f'<select name="ing_unidad" style="flex:1">{ops}</select>'
-            '<button type="button" class="btn mini sec" onclick="this.parentElement.remove()">−</button>'
-            "</div>"
-        )
-
-    filas = "".join(_fila(i) for i in ings)
-    chk = lambda k: " checked" if es_edicion and datos.get(k) else ""
-    return f"""
-<div class="card"><div class="franja">{"Editar" if es_edicion else "Nueva"} receta</div>
-<form method="post" action="/recetas/guardar">
-<input type="hidden" name="receta_id" value="{rid}">
-<datalist id="catalogo_ing">{datalist}</datalist>
-<div class="row">
-  <div style="flex:3"><label>Título</label>
-    <input name="titulo" required value="{titulo}" placeholder="Lentejas de la abuela"></div>
-  <div><label>Raciones</label>
-    <input name="raciones" type="number" min="1" value="{raciones}" required></div>
-</div>
-<label>Ingredientes</label>
-<div id="ings">{filas}</div>
-<button type="button" class="btn mini" onclick="addFila()">+ Añadir ingrediente</button>
-<div style="margin-top:12px">
-  <label><input type="checkbox" name="plato_unico" value="1"{chk('es_plato_unico')} style="width:auto"> Óptima para batchcooking / plato único</label>
-  <label><input type="checkbox" name="cena" value="1"{chk('es_cena')} style="width:auto"> Buena como cena (ligera y sencilla)</label>
-  <label><input type="checkbox" name="favorita" value="1"{chk('es_favorita')} style="width:auto"> Favorita ★</label>
-</div>
-<div style="margin-top:12px">
-  <button class="btn" type="submit">Guardar receta</button>
-  {"" if not es_edicion else f'<button class="btn sec" formaction="/recetas/{rid}/eliminar" formmethod="post" formnovalidate>Eliminar</button>'}
-</div>
-</form>
-<p class="meta">Elige el ingrediente escribiendo (se busca en el catálogo de Alcampo), la unidad,
-y la cantidad (solo números). Usa + y − para añadir o quitar líneas. Tras guardar, ejecuta
-<code>menu-app-emparejar</code> para casar los ingredientes con productos.</p>
-</div>
-<script>
-function addFila() {{
-  var cont = document.getElementById('ings');
-  var f = cont.firstElementChild.cloneNode(true);
-  f.querySelectorAll('input').forEach(function(i){{ i.value=''; }});
-  cont.appendChild(f);
-}}
-</script>
-"""
-
-
-def _barras_nutrientes(conn, cfg, ingredientes: list[dict], raciones: int) -> str:
-    """Barras: nutrientes por ración de la receta frente al objetivo del día."""
-    por_racion = nutrientes_receta(conn, ingredientes, raciones)
-    cfg_nut = dataclasses.replace(config_nutricion(cfg), fraccion_ingesta_menu=1.0)
-    dia = {b.nutriente: b for b in objetivos_semanales(cfg_nut, 1)}
-    dias = cfg_nut.dias
-
-    valores = dict(por_racion)
-    valores["grasas_insat"] = max(0.0, por_racion.get("grasas", 0.0) - por_racion.get("grasas_sat", 0.0))
-
-    filas = ""
-    for clave, nombre, unidad in _ORDEN_NUTRIENTES:
-        val = valores.get(clave, 0.0)
-        if clave == "energia_kcal":
-            objetivo_dia = cfg_nut.kcal_por_comensal_dia
-        elif clave == "grasas_insat":
-            bg, bs = dia.get("grasas"), dia.get("grasas_sat")
-            objetivo_dia = ((bg.maximo or 0) / dias) if bg else 0
-        else:
-            b = dia.get(clave)
-            objetivo_dia = ((b.maximo or b.minimo or 0) / dias) if b else 0
-        pct = min(100, 100 * val / objetivo_dia) if objetivo_dia else 0
-        filas += (
-            f'<tr><td style="width:150px">{nombre}</td>'
-            f'<td style="width:55px;text-align:right">{val:.0f} {unidad}</td>'
-            f'<td><div style="background:#ddd;border-radius:5px;height:14px;overflow:hidden">'
-            f'<div style="background:#2e7d32;height:100%;width:{pct:.0f}%"></div></div></td>'
-            f'<td class="meta" style="width:110px">de {objetivo_dia:.0f} {unidad}/día</td></tr>'
-        )
-    return (
-        '<div class="card"><div class="franja">Nutrientes de una ración vs. el total del día'
-        "</div><table>" + filas + "</table>"
-        '<p class="meta">La barra indica qué parte de la necesidad diaria (por persona) cubre '
-        "una ración de esta receta.</p></div>"
-    )
+from .tareas import (
+    _ACTUALIZACION,
+    _CARRITO,
+    _CATALOGO,
+    _CHROMIUM,
+    _banner_actualizacion,
+    _comprobar_actualizacion,
+    _lanzar_actualizacion,
+    _lanzar_carrito,
+    _lanzar_instalar_chromium,
+)
 
 
 def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
@@ -1017,37 +464,38 @@ function reescalarReceta() {{
             )
         filas = ""
         for pasillo, lineas in compra.por_pasillo().items():
-            subtotal = sum(l.total for l in lineas if l.total is not None)
+            subtotal = sum(linea.total for linea in lineas if linea.total is not None)
             filas += (
                 f'<tr><td colspan="5" style="padding-top:10px"><b>🛒 {html.escape(pasillo)}</b> '
                 f'<span class="meta">({subtotal:.2f} €)</span></td></tr>'
             )
-            for l in lineas:
+            for linea in lineas:
                 enlace = (
-                    f'<a class="receta" href="{html.escape(l.url)}" target="_blank">'
-                    f"{html.escape(l.nombre[:46])}</a>"
-                    if l.url else html.escape(l.nombre[:46])
+                    f'<a class="receta" href="{html.escape(linea.url)}" target="_blank">'
+                    f"{html.escape(linea.nombre[:46])}</a>"
+                    if linea.url else html.escape(linea.nombre[:46])
                 )
                 # Marcas de sustitucion por agotado (#53) y oferta (#57).
                 notas = ""
-                if l.sustituido:
+                if linea.sustituido:
                     notas += (
-                        f'<br><span class="meta" title="Agotado: {html.escape(l.nombre_original or "")}">'
+                        '<br><span class="meta" title="Agotado: '
+                        f'{html.escape(linea.nombre_original or "")}">'
                         "🔄 sustituido (agotado)</span>"
                     )
-                if l.en_oferta:
-                    notas += f'<br><span class="chip">🏷️ oferta · ahorras {l.ahorro:.2f} €</span>'
-                precio = f"{l.precio_unidad:.2f}" if l.precio_unidad is not None else "—"
-                tot = f"{l.total:.2f}" if l.total is not None else "—"
+                if linea.en_oferta:
+                    notas += f'<br><span class="chip">🏷️ oferta · ahorras {linea.ahorro:.2f} €</span>'
+                precio = f"{linea.precio_unidad:.2f}" if linea.precio_unidad is not None else "—"
+                tot = f"{linea.total:.2f}" if linea.total is not None else "—"
                 # Lista MARCABLE (#66): checkbox persistida en localStorage (por plan +
                 # producto), para ir tachando mientras compras sin recargar la pagina.
-                item_id = html.escape(f"{compra.plan_id or ''}:{l.producto_id}")
+                item_id = html.escape(f"{compra.plan_id or ''}:{linea.producto_id}")
                 filas += (
                     f'<tr class="fila-compra" data-item="{item_id}">'
                     f'<td><input type="checkbox" class="chk-comprado" '
                     f'onchange="marcarComprado(this)" style="width:auto"></td>'
-                    f"<td>{l.unidades}×</td><td>{enlace}"
-                    f'<br><span class="meta">necesitas {l.cantidad_legible}</span>{notas}</td>'
+                    f"<td>{linea.unidades}×</td><td>{enlace}"
+                    f'<br><span class="meta">necesitas {linea.cantidad_legible}</span>{notas}</td>'
                     f'<td style="text-align:right">{precio}</td>'
                     f'<td style="text-align:right"><b>{tot}</b></td></tr>'
                 )
@@ -1213,11 +661,11 @@ function reescalarReceta() {{
         n = len(puntos)
         xs = [pad + i * (w - 2 * pad) / max(1, n - 1) for i in range(n)]
         ys = [h - pad - (c - c_min) / rango * (h - 2 * pad) for c in costes]
-        linea = " ".join(f"{x:.0f},{y:.0f}" for x, y in zip(xs, ys))
+        linea = " ".join(f"{x:.0f},{y:.0f}" for x, y in zip(xs, ys, strict=True))
         puntos_svg = "".join(
             f'<circle cx="{x:.0f}" cy="{y:.0f}" r="3" fill="var(--verde)">'
             f"<title>{html.escape(f)}: {c:.2f} €</title></circle>"
-            for (f, c), x, y in zip(puntos, xs, ys)
+            for (f, c), x, y in zip(puntos, xs, ys, strict=True)
         )
         sparkline = (
             f'<svg viewBox="0 0 {w} {h}" style="width:100%;max-width:{w}px;height:auto">'
@@ -1319,7 +767,7 @@ function reescalarReceta() {{
                 filas = "".join(
                     f'<tr><td>{html.escape(p["nombre"])}<br>'
                     f'<span class="meta">{html.escape(p["marca"] or "")} · '
-                    f'{("%.2f €" % p["precio_eur"]) if p["precio_eur"] is not None else "—"}</span></td>'
+                    f'{(f"{p["precio_eur"]:.2f} €") if p["precio_eur"] is not None else "—"}</span></td>'
                     f'<td style="text-align:right"><form method="post" action="/matching/asignar">'
                     f'<input type="hidden" name="ing" value="{html.escape(ing)}">'
                     f'<input type="hidden" name="rid" value="{html.escape(p["retailer_product_id"])}">'
@@ -1372,12 +820,12 @@ function reescalarReceta() {{
 
     @app.post("/matching/asignar")
     async def matching_asignar(ing: str = Form(""), rid: str = Form("")):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         conn, _ = _conn()
         try:
             ok = MatchingRepository(conn).asignar_producto(
-                ing.strip(), rid.strip(), datetime.now(timezone.utc).isoformat(timespec="seconds")
+                ing.strip(), rid.strip(), datetime.now(UTC).isoformat(timespec="seconds")
             )
         finally:
             conn.close()
@@ -1388,7 +836,7 @@ function reescalarReceta() {{
     # --- Importar receta por URL (#42), reutiliza recipe-scrapers (583 sitios, #48) ---
     @app.post("/recetas/importar")
     async def recetas_importar(url: str = Form("")):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from ..recetas.repositorio import RecetaRepository
         from ..recetas.scraper import RecetaScraper
@@ -1411,7 +859,7 @@ function reescalarReceta() {{
         conn, _ = _conn()
         try:
             RecetaRepository(conn).upsert_receta(
-                receta, datetime.now(timezone.utc).isoformat(timespec="seconds")
+                receta, datetime.now(UTC).isoformat(timespec="seconds")
             )
             conn.commit()
         finally:
@@ -1422,13 +870,13 @@ function reescalarReceta() {{
 
     @app.post("/matching/sinonimo")
     async def matching_sinonimo(palabra: str = Form(""), reemplazo: str = Form("")):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         conn, _ = _conn()
         try:
             if palabra.strip() and reemplazo.strip():
                 MatchingRepository(conn).anadir_sinonimo(
-                    palabra, reemplazo, datetime.now(timezone.utc).isoformat(timespec="seconds")
+                    palabra, reemplazo, datetime.now(UTC).isoformat(timespec="seconds")
                 )
                 msg = f"Sinónimo «{palabra.strip()} → {reemplazo.strip()}» guardado."
             else:
@@ -1767,7 +1215,9 @@ function reescalarReceta() {{
         unidades = form.getlist("ing_unidad")
         ingredientes = [
             {"nombre": n, "cantidad": c, "unidad": u}
-            for n, c, u in zip(nombres, cantidades, unidades)
+            # strict=False: el formulario puede llegar con listas de longitud distinta
+            # si el JS del cliente falla al añadir/quitar una fila; no debe romper el guardado.
+            for n, c, u in zip(nombres, cantidades, unidades, strict=False)
             if (n or "").strip()
         ]
         conn, _ = _conn()

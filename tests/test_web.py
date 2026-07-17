@@ -57,7 +57,6 @@ def test_actualizaciones_solo_boton(client, monkeypatch):
     assert 'action="/actualizaciones/comprobar"' in r.text
     assert 'name="repo"' not in r.text  # ya no hay campo que rellenar
     # Al pulsar, si estamos al dia, avisa; si hay version, instala. Simulamos "al dia".
-    from menu_app import actualizaciones
     monkeypatch.setattr("menu_app.web.app.hay_actualizacion", lambda *a, **k: None)
     r2 = client.post("/actualizaciones/comprobar", follow_redirects=True)
     assert r2.status_code == 200

@@ -141,5 +141,5 @@ def estimar(nombre_producto: str) -> tuple[dict[str, float], str] | None:
     for clave, alimento in sorted(_TABLA_POR_CLAVE, key=lambda p: -len(p[0])):
         patron = r"\b" + re.escape(clave) + r"\b"
         if re.search(patron, nombre):
-            return dict(zip(_M, alimento.valores)), alimento.nombre
+            return dict(zip(_M, alimento.valores, strict=True)), alimento.nombre
     return None

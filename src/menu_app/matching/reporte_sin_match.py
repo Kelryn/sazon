@@ -14,7 +14,7 @@ import sqlite3
 
 from rapidfuzz import fuzz, process
 
-from .matcher import IndiceProductos, MatcherLexico
+from .matcher import IndiceProductos
 from .normalizar import clave_ingrediente
 from .repositorio import MatchingRepository
 
@@ -47,7 +47,6 @@ def _categoria(ing: str) -> str:
 def generar_reporte(conn: sqlite3.Connection) -> str:
     """Devuelve el contenido markdown del informe de ingredientes sin match."""
     indice = IndiceProductos.construir(MatchingRepository(conn).productos_aptos())
-    matcher = MatcherLexico(indice)
 
     filas = conn.execute(
         """SELECT m.ingrediente_norm AS ing, COUNT(ri.id) AS usos

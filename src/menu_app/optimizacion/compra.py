@@ -63,22 +63,22 @@ class Compra:
 
     @property
     def total(self) -> float:
-        return round(sum(l.total for l in self.lineas if l.total is not None), 2)
+        return round(sum(linea.total for linea in self.lineas if linea.total is not None), 2)
 
     @property
     def ahorro_total(self) -> float:
         """Cuanto ahorras por las ofertas ya aplicadas en el total (#57/#59)."""
-        return round(sum(l.ahorro for l in self.lineas), 2)
+        return round(sum(linea.ahorro for linea in self.lineas), 2)
 
     @property
     def n_sustituidos(self) -> int:
-        return sum(1 for l in self.lineas if l.sustituido)
+        return sum(1 for linea in self.lineas if linea.sustituido)
 
     def por_pasillo(self) -> dict[str, list[LineaCompra]]:
         """Lineas agrupadas por pasillo/categoria (para la lista de la compra)."""
         grupos: dict[str, list[LineaCompra]] = {}
-        for l in self.lineas:
-            grupos.setdefault(l.pasillo, []).append(l)
+        for linea in self.lineas:
+            grupos.setdefault(linea.pasillo, []).append(linea)
         return dict(sorted(grupos.items()))
 
 

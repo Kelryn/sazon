@@ -11,8 +11,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from ..ingesta.models import Product
 from ..almacenamiento.modelos import ProductoNormalizado
+from ..ingesta.models import Product
 from .clasificacion import ConfigClasificacion, es_apto_receta
 
 # Factor de conversion a la unidad base (g para peso, ml para volumen) y tipo.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -18,7 +18,6 @@ from .descubrimiento import (
     urls_desde_categorias,
     urls_desde_pagina,
     urls_desde_sitemap,
-    urls_por_crawl,
 )
 from .repositorio import RecetaRepository
 from .scraper import RecetaScraper
@@ -100,7 +99,7 @@ def main(
     conn = get_connection(db_path)
     init_db(conn)
     repo = RecetaRepository(conn)
-    fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fecha = datetime.now(UTC).isoformat(timespec="seconds")
 
     with RecetaScraper(
         cache_dir=recetas_cfg.get("cache_dir", ".cache/recetas"),
@@ -121,7 +120,11 @@ def main(
             ok = _crawl_ingesta(scraper, repo, SEMILLAS_SALADAS, crawl_n, fecha, reingerir, verbose)
         else:
             if urls_file:
-                urls = [l.strip() for l in urls_file.read_text(encoding="utf-8").splitlines() if l.strip()]
+                urls = [
+                    linea.strip()
+                    for linea in urls_file.read_text(encoding="utf-8").splitlines()
+                    if linea.strip()
+                ]
             elif sitemap_url:
                 urls = urls_desde_sitemap(sitemap_url)
             elif pagina_url:

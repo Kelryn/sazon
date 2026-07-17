@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -89,7 +89,7 @@ def main(
         product_page_ttl_seconds=int(ingesta_cfg.get("product_page_ttl_hours", 6)) * 3600,
     )
 
-    fecha_extraccion = datetime.now(timezone.utc).date().isoformat()
+    fecha_extraccion = datetime.now(UTC).date().isoformat()
     products: list[Product] = []
     seen_ids: set[str] = set()
 

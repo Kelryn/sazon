@@ -13,6 +13,7 @@ wheels/
 .cache/
 data/
 .pytest_cache/
+.coverage
 
 # Artefactos generados y ajustes locales del usuario
 *.log

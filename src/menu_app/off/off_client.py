@@ -53,7 +53,7 @@ class OFFClient:
         self._cache_ttl = cache_ttl_seconds
         self._page_size = page_size
 
-    def __enter__(self) -> "OFFClient":
+    def __enter__(self) -> OFFClient:
         return self
 
     def __exit__(self, *exc_info: object) -> None:

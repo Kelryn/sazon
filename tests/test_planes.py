@@ -7,7 +7,6 @@ import pytest
 from menu_app.almacenamiento.db import get_connection, init_db
 from menu_app.optimizacion.planes import cargar_plan, generar_plan, regenerar_semana
 from menu_app.optimizacion.servicio import _max_repeticiones_semana, semanas_exclusion
-from menu_app.recetas.manual import añadir_receta_manual
 
 
 @pytest.fixture

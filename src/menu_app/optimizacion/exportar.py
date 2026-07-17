@@ -52,11 +52,11 @@ def compra_a_csv(compra: Compra) -> bytes:
     w = csv.writer(buf)
     w.writerow(["Pasillo", "Producto", "Unidades", "Cantidad necesaria", "€/ud", "Total €", "Enlace"])
     for pasillo, lineas in compra.por_pasillo().items():
-        for l in lineas:
+        for linea in lineas:
             w.writerow([
-                pasillo, l.nombre, l.unidades, l.cantidad_legible,
-                f"{l.precio_unidad:.2f}" if l.precio_unidad is not None else "",
-                f"{l.total:.2f}" if l.total is not None else "", l.url or "",
+                pasillo, linea.nombre, linea.unidades, linea.cantidad_legible,
+                f"{linea.precio_unidad:.2f}" if linea.precio_unidad is not None else "",
+                f"{linea.total:.2f}" if linea.total is not None else "", linea.url or "",
             ])
     w.writerow([])
     w.writerow(["", "", "", "", "", f"TOTAL {compra.total:.2f}", ""])
@@ -114,10 +114,10 @@ def compra_a_pdf(compra: Compra) -> bytes:
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 7, _ascii(pasillo), new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 9)
-        for l in lineas:
-            precio = f"{l.total:.2f} EUR" if l.total is not None else ""
-            pdf.cell(12, 6, f"{l.unidades}x", border="B")
-            pdf.cell(150, 6, _ascii(l.nombre)[:70], border="B")
+        for linea in lineas:
+            precio = f"{linea.total:.2f} EUR" if linea.total is not None else ""
+            pdf.cell(12, 6, f"{linea.unidades}x", border="B")
+            pdf.cell(150, 6, _ascii(linea.nombre)[:70], border="B")
             pdf.cell(28, 6, precio, border="B", align="R", new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
 

@@ -88,7 +88,7 @@ class IndiceProductos:
     es_blanca: list[bool] = field(default_factory=list)  # marca blanca (Alcampo/Auchan)
 
     @classmethod
-    def construir(cls, productos: list[tuple]) -> "IndiceProductos":
+    def construir(cls, productos: list[tuple]) -> IndiceProductos:
         rids, nombres, textos, crudos, tokens = [], [], [], [], []
         precios: list[float] = []
         es_blanca: list[bool] = []
@@ -114,6 +114,34 @@ class IndiceProductos:
 
     def __len__(self) -> int:
         return len(self.rids)
+
+
+# Cache de IndiceProductos por conexion (#90): construirlo recorre TODO el catalogo
+# apto (~14000 productos reales, ~230ms medidos) y se llamaba de cero en cada pagina
+# web que toca el matching (editor de recetas, informe de sin-match...). Se cachea
+# keyed por una firma barata (nº de aptos + su fecha de actualizacion mas reciente),
+# igual que el cache de RecetaCalculada (economia_recetas._firma_cache, #34).
+_CACHE_INDICE: dict = {"firma": None, "indice": None}
+
+
+def _firma_productos_aptos(conn) -> tuple:
+    fila = conn.execute(
+        "SELECT COUNT(*), MAX(fecha_actualizacion) FROM productos WHERE apto_receta = 1"
+    ).fetchone()
+    return (fila[0], fila[1])
+
+
+def indice_productos_aptos_cacheado(conn, productos: list[tuple]) -> IndiceProductos:
+    """Como `IndiceProductos.construir(productos)`, pero reutiliza el ultimo indice
+    si el catalogo apto no ha cambiado desde la ultima llamada (misma conexion o no:
+    la firma se basa en los datos, no en el objeto `conn`)."""
+    firma = _firma_productos_aptos(conn)
+    if _CACHE_INDICE["firma"] == firma and _CACHE_INDICE["indice"] is not None:
+        return _CACHE_INDICE["indice"]
+    indice = IndiceProductos.construir(productos)
+    _CACHE_INDICE["firma"] = firma
+    _CACHE_INDICE["indice"] = indice
+    return indice
 
 
 class MatcherLexico:

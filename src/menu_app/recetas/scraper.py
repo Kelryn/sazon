@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from collections import deque
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -72,7 +71,7 @@ class RecetaScraper:
         self._rate_limiter = RateLimiter(min_request_interval_seconds, jitter_seconds)
         self._cache_ttl = cache_ttl_seconds
 
-    def __enter__(self) -> "RecetaScraper":
+    def __enter__(self) -> RecetaScraper:
         return self
 
     def __exit__(self, *exc_info: object) -> None:

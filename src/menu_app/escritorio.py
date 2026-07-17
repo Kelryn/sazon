@@ -48,15 +48,15 @@ def _redirigir_salida(datos: Path) -> None:
 
 
 def _arrancar_servidor(config_path, puerto: int, datos: Path) -> None:
-    """Arranca uvicorn en ESTE hilo (secundario). Sin manejadores de señales (solo
-    valen en el hilo principal). Cualquier error se registra en el log."""
+    """Arranca uvicorn en ESTE hilo (secundario). uvicorn (>=0.24) ya detecta que no
+    es el hilo principal y se salta la instalacion de manejadores de señales por su
+    cuenta (ver Server.capture_signals). Cualquier error se registra en el log."""
     try:
         from menu_app.web.app import crear_app
 
         app = crear_app(config_path)
         config = uvicorn.Config(app, host="127.0.0.1", port=puerto, log_level="warning")
         server = uvicorn.Server(config)
-        server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
         server.run()
     except Exception:  # noqa: BLE001 - se muestra en la ventana y se registra
         try:

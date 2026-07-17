@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .servicio import ResultadoMenu, generar_menu, por_que_receta, semanas_exclusion
 
@@ -69,7 +69,7 @@ def guardar_semana(
         "ON CONFLICT(plan_id, semana) DO UPDATE SET datos = excluded.datos, creado = excluded.creado",
         (
             plan_id, semana,
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            datetime.now(UTC).isoformat(timespec="seconds"),
             _serializar(res, batchcooking),
         ),
     )
@@ -150,11 +150,11 @@ def asignar_dias(datos: dict, dias_semana: list[str]) -> list[tuple[str, str | N
     comida_por_dia: dict[str, str | None] = {}
     for grupo_dias, cuentas in ((dias_bc, bc), (dias_libres, libres)):
         reparto = _distribuir(cuentas, len(grupo_dias))
-        for dia, rid in zip(grupo_dias, reparto):
+        for dia, rid in zip(grupo_dias, reparto, strict=True):
             comida_por_dia[dia] = rid
 
     cenas = _distribuir(dict(datos.get("seleccion_cena") or {}), n)
-    cena_por_dia = dict(zip(dias, cenas))
+    cena_por_dia = dict(zip(dias, cenas, strict=True))
 
     # VARIEDAD DE GRUPOS POR DIA (#27): reordena los dias (sin cambiar que recetas
     # entran) para que no se repita el mismo grupo de alimento en dias consecutivos.
@@ -168,9 +168,9 @@ def asignar_dias(datos: dict, dias_semana: list[str]) -> list[tuple[str, str | N
     _variar_grupos(dias, cena_por_dia, _grupo)
 
     # Evita misma receta en comida y cena del mismo dia (intercambio simple).
-    for i, dia in enumerate(dias):
+    for dia in dias:
         if cena_por_dia.get(dia) and cena_por_dia[dia] == comida_por_dia.get(dia):
-            for j, otro in enumerate(dias):
+            for otro in dias:
                 if (
                     otro != dia
                     and cena_por_dia.get(otro) != comida_por_dia.get(dia)
@@ -217,7 +217,7 @@ def generar_plan(
     n = int(n_semanas if n_semanas is not None else cfg.get("semanas_plan", 1))
     n = max(1, n)
     ventana = semanas_exclusion(cfg)
-    plan_id = datetime.now(timezone.utc).strftime("plan-%Y%m%d-%H%M%S")
+    plan_id = datetime.now(UTC).strftime("plan-%Y%m%d-%H%M%S")
 
     # Rotacion multi-semana (#28): parte del histórico de planes anteriores, para no
     # repetir lo cocinado en las ultimas `ventana` semanas aunque sea un plan nuevo.

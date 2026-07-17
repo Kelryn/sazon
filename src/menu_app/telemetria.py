@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -30,7 +30,7 @@ def registrar_error(origen: str, exc: BaseException, activo: bool) -> None:
     try:
         with _ruta_log().open("a", encoding="utf-8") as f:
             f.write(
-                f"\n=== {datetime.now(timezone.utc).isoformat(timespec='seconds')} "
+                f"\n=== {datetime.now(UTC).isoformat(timespec='seconds')} "
                 f"[{origen}] ===\n"
             )
             f.write("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))

@@ -26,7 +26,7 @@ estructura de este modulo ya lo admite (basta añadir mas entradas).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # kcal por gramo de cada macronutriente (factores de Atwater).
 KCAL_POR_G_PROTEINA = 4.0

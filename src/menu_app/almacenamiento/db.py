@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
 SCHEMA_VERSION = 5
@@ -206,6 +207,28 @@ _INDICES_POST_MIGRACION = (
     "CREATE INDEX IF NOT EXISTS idx_recetas_bc ON recetas (es_batchcooking)",
 )
 
+# Migraciones de esquema NO aditivas (#84): las versiones 1-5 solo añadieron
+# columnas nuevas (NULL por defecto), ya cubierto de forma idempotente por
+# _COLUMNAS_EVOLUTIVAS/_migrar_columnas de arriba y no necesitan entrada aqui.
+# Este registro es el mecanismo para cambios que ESO no puede expresar (rellenar
+# datos, tocar una tabla existente, borrar algo obsoleto...): cada entrada se
+# ejecuta UNA sola vez, en orden, la primera vez que se abre una BD cuyo
+# schema_version guardado es menor que esa clave.
+_MIGRACIONES: dict[int, Callable[[sqlite3.Connection], None]] = {}
+
+
+def _version_guardada(conn: sqlite3.Connection) -> int:
+    fila = conn.execute(
+        "SELECT valor FROM meta WHERE clave = 'schema_version'"
+    ).fetchone()
+    return int(fila["valor"]) if fila else 0
+
+
+def _aplicar_migraciones(conn: sqlite3.Connection) -> None:
+    actual = _version_guardada(conn)
+    for version in sorted(v for v in _MIGRACIONES if v > actual):
+        _MIGRACIONES[version](conn)
+
 
 def get_connection(db_path: str | Path) -> sqlite3.Connection:
     db_path = Path(db_path)
@@ -222,7 +245,8 @@ def get_connection(db_path: str | Path) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
-    conn.executescript(_SCHEMA)
+    conn.executescript(_SCHEMA)  # crea 'meta' si falta, necesaria para leer la version
+    _aplicar_migraciones(conn)
     _migrar_columnas(conn)
     for sql in _INDICES_POST_MIGRACION:  # tras la migracion: columnas ya existen
         try:

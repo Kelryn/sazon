@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from ..matching.matcher import IndiceProductos, MatcherLexico
+from ..matching.matcher import MatcherLexico, indice_productos_aptos_cacheado
 from ..matching.normalizar import clave_ingrediente
 from ..matching.repositorio import MatchingRepository
 from ..optimizacion.economia_recetas import NUTRIENTES, _gramos_por_piezas
@@ -44,7 +44,8 @@ def nutrientes_receta(
     que el menu para casar cada ingrediente con un producto de Alcampo (robusto
     aunque el nombre no sea exacto) y prorratea por 100 g/ml.
     """
-    indice = IndiceProductos.construir(MatchingRepository(conn).productos_aptos())
+    repo = MatchingRepository(conn)
+    indice = indice_productos_aptos_cacheado(conn, repo.productos_aptos())
     matcher = MatcherLexico(indice)
     nutricion_rid = _nutricion_por_rid(conn)
 

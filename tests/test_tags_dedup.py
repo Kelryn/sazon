@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from menu_app.recetas.dedup import GrupoDuplicado, _jaccard
+from menu_app.recetas.dedup import _jaccard
 from menu_app.recetas.tags import generar_tags
 
 

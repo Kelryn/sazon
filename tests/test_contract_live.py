@@ -18,10 +18,13 @@ import pytest
 
 from menu_app.ingesta.alcampo_client import AlcampoClient, AlcampoClientConfig
 
-pytestmark = pytest.mark.skipif(
-    not os.environ.get("RUN_LIVE_ALCAMPO_TESTS"),
-    reason="test de contrato en vivo, deshabilitado por defecto (ver docstring del modulo)",
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not os.environ.get("RUN_LIVE_ALCAMPO_TESTS"),
+        reason="test de contrato en vivo, deshabilitado por defecto (ver docstring del modulo)",
+    ),
+]
 
 
 def test_category_tree_shape():

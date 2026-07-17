@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -72,7 +72,7 @@ def main(
     ids = repo.ids_sin_enriquecer(solo_aptos=not incluir_no_aptos, limite=limit)
     click.echo(f"Productos a enriquecer: {len(ids)}")
 
-    fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fecha = datetime.now(UTC).isoformat(timespec="seconds")
     con_nutricion = 0
     errores = 0
 

@@ -332,7 +332,7 @@ def optimizar_comida_cena(
             for r in pool:
                 if r.familia:
                     familias.setdefault(r.familia, []).append(u_vars[r.id])
-        for i, (fam, uvars) in enumerate(familias.items()):
+        for i, (_fam, uvars) in enumerate(familias.items()):
             if len(uvars) <= 1:
                 continue  # una sola receta de esa familia no puede ser monotona
             exceso = pulp.LpVariable(f"exceso_fam_{i}", lowBound=0)

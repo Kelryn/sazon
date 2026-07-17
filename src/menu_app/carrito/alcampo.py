@@ -24,9 +24,10 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 BASE_URL = "https://www.compraonline.alcampo.es"
 LOGIN_URL = f"{BASE_URL}/login"
@@ -104,11 +105,11 @@ class ResultadoCarrito:
 
     @property
     def ok(self) -> bool:
-        return bool(self.lineas) and all(l.ok for l in self.lineas)
+        return bool(self.lineas) and all(linea.ok for linea in self.lineas)
 
     @property
     def n_ok(self) -> int:
-        return sum(1 for l in self.lineas if l.ok)
+        return sum(1 for linea in self.lineas if linea.ok)
 
 
 def playwright_disponible() -> bool:
@@ -181,17 +182,17 @@ class _Linea:
 def _normalizar_lineas(lineas: Iterable[Any]) -> list[_Linea]:
     """Acepta objetos LineaCompra (optimizacion.compra) o dicts equivalentes."""
     out: list[_Linea] = []
-    for l in lineas:
-        if isinstance(l, dict):
-            pid = str(l.get("producto_id") or l.get("retailer_product_id") or "")
-            nombre = str(l.get("nombre") or "")
-            url = l.get("url")
-            unidades = int(l.get("unidades") or 1)
+    for linea in lineas:
+        if isinstance(linea, dict):
+            pid = str(linea.get("producto_id") or linea.get("retailer_product_id") or "")
+            nombre = str(linea.get("nombre") or "")
+            url = linea.get("url")
+            unidades = int(linea.get("unidades") or 1)
         else:
-            pid = str(getattr(l, "producto_id", "") or "")
-            nombre = str(getattr(l, "nombre", "") or "")
-            url = getattr(l, "url", None)
-            unidades = int(getattr(l, "unidades", 1) or 1)
+            pid = str(getattr(linea, "producto_id", "") or "")
+            nombre = str(getattr(linea, "nombre", "") or "")
+            url = getattr(linea, "url", None)
+            unidades = int(getattr(linea, "unidades", 1) or 1)
         if pid:
             out.append(_Linea(pid, nombre, url, max(1, unidades)))
     return out

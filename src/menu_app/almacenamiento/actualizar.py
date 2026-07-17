@@ -8,9 +8,9 @@ ACTUALIZACION: refresca precios/ofertas y añade productos nuevos (upsert).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 
 from ..ingesta.alcampo_client import AlcampoClient, AlcampoClientConfig
 from ..ingesta.categories import FOOD_CATEGORY_ROOTS
@@ -69,7 +69,7 @@ def actualizar_catalogo(
         ),
     )
 
-    ahora = datetime.now(timezone.utc)
+    ahora = datetime.now(UTC)
     fecha_extraccion = ahora.date().isoformat()
     fecha_actualizacion = ahora.isoformat(timespec="seconds")
 

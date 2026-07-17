@@ -5,11 +5,9 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-import pytest
-
 from menu_app.ia.cliente_claude import DesambiguadorClaude
 from menu_app.ia.cliente_gemini import DesambiguadorGemini
-from menu_app.matching.matcher import IndiceProductos, Match, MatcherLexico
+from menu_app.matching.matcher import IndiceProductos, MatcherLexico
 
 
 class _FakeMessages:

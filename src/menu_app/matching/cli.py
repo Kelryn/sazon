@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 import yaml
-
-import time
 
 from ..almacenamiento.db import get_connection, init_db
 from ..ia.claves import obtener_clave
@@ -94,7 +93,7 @@ def main(
     sinonimos = repo.sinonimos()  # sinonimos del usuario (#22/#14)
     if sinonimos:
         click.echo(f"Sinonimos del usuario aplicados: {len(sinonimos)}")
-    fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fecha = datetime.now(UTC).isoformat(timespec="seconds")
     con_match = 0
 
     def _aplicar_sinonimos(clave: str) -> str:

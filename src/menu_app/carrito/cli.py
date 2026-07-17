@@ -130,8 +130,8 @@ def main(
     )
 
     click.echo("")
-    agotados = [l for l in res.lineas if l.detalle == "agotado"]
-    fallidos = [l for l in res.lineas if not l.ok and l.detalle != "agotado"]
+    agotados = [linea for linea in res.lineas if linea.detalle == "agotado"]
+    fallidos = [linea for linea in res.lineas if not linea.ok and linea.detalle != "agotado"]
     click.echo(
         f"Sesion iniciada: {'si' if res.logueado else 'no'} | "
         f"lineas OK: {res.n_ok}/{len(res.lineas)} | "
@@ -140,9 +140,15 @@ def main(
         + (f" | total cesta: {res.total_cesta}" if res.total_cesta else "")
     )
     if agotados:
-        click.echo("Agotados (no disponibles en Alcampo): " + ", ".join(l.nombre for l in agotados))
+        click.echo(
+            "Agotados (no disponibles en Alcampo): "
+            + ", ".join(linea.nombre for linea in agotados)
+        )
     if fallidos:
-        click.echo("Fallidos: " + "; ".join(f"{l.nombre} ({l.detalle})" for l in fallidos))
+        click.echo(
+            "Fallidos: "
+            + "; ".join(f"{linea.nombre} ({linea.detalle})" for linea in fallidos)
+        )
     if res.endpoints_carrito:
         ej = res.endpoints_carrito[0]
         click.echo(f"  Ejemplo de endpoint del carrito (Via 1 futura): {ej['metodo']} {ej['url']}")
@@ -160,7 +166,7 @@ def main(
         datos = {
             "dry_run": res.dry_run,
             "logueado": res.logueado,
-            "lineas": [vars(l) for l in res.lineas],
+            "lineas": [vars(linea) for linea in res.lineas],
             "endpoints_carrito": res.endpoints_carrito,
         }
         reporte_path.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")

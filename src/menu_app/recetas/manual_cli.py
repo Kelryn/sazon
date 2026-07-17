@@ -45,7 +45,7 @@ def anadir(config_path, db_path, titulo, raciones, ingredientes, favorita, tiemp
             es_favorita=favorita, tiempo_total_min=tiempo,
         )
     except ValueError as e:
-        raise click.ClickException(str(e))
+        raise click.ClickException(str(e)) from e
     click.echo(f"Receta '{titulo}' guardada (id {rid}){' [FAVORITA]' if favorita else ''}.")
     click.echo(
         "Recuerda ejecutar 'menu-app-emparejar' para casar sus ingredientes con productos "

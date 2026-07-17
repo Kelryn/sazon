@@ -7,7 +7,7 @@ import click
 from ..almacenamiento.db import get_connection, init_db
 from ..configuracion import cargar_config
 from .nutrientes import resumen_legible
-from .servicio import ResultadoMenu, generar_menu
+from .servicio import generar_menu
 from .solver import MenuOptimizado, RecetaOpt
 
 

@@ -70,7 +70,7 @@ def test_sustituye_por_producto_de_la_misma_subcategoria(conn):
     _guardar_plan_directo(conn, "p1", "r1", raciones=1.0)
 
     compra = lista_compra(conn, "p1")
-    linea = next((l for l in compra.lineas if l.nombre_original == "Cebolla dulce 1 kg"), None)
+    linea = next((ln for ln in compra.lineas if ln.nombre_original == "Cebolla dulce 1 kg"), None)
     assert linea is not None, "debe sustituir el producto agotado"
     assert linea.producto_id == "P2"  # la de la MISMA subcategoria, no la de especias
     assert linea.sustituido is True
@@ -89,7 +89,7 @@ def test_sin_alternativa_en_categoria_reporta_agotado(conn):
 
     compra = lista_compra(conn, "p1")
     assert "Cebolla dulce 1 kg" in compra.agotados_sin_sustituto
-    assert not any(l.nombre == "Cebolla granulada 60 g" for l in compra.lineas)
+    assert not any(ln.nombre == "Cebolla granulada 60 g" for ln in compra.lineas)
 
 
 def test_oferta_reduce_precio_y_suma_ahorro(conn):

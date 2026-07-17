@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from menu_app.off.matcher import mejor_match, texto_busqueda
 from menu_app.off.off_client import OFFClient
 

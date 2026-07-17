@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -52,7 +52,7 @@ def main(
     pendientes = repo.productos_sin_off(solo_aptos=not incluir_no_aptos, limite=limit)
     click.echo(f"Productos a cruzar con OFF: {len(pendientes)}")
 
-    fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fecha = datetime.now(UTC).isoformat(timespec="seconds")
     con_match = 0
     with OFFClient(
         cache_dir=off_cfg.get("cache_dir", ".cache/off"),

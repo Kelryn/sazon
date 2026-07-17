@@ -13,11 +13,10 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..matching.normalizar import clave_ingrediente
 from ..optimizacion.batchcooking import es_batchcooking
-from ..optimizacion.rol_plato import rol_receta
 from .modelos import Receta
 from .parseo_ingredientes import IngredienteReceta, parsear_ingrediente
 from .repositorio import RecetaRepository
@@ -95,7 +94,7 @@ def guardar_receta(
         tiempo_total_min=None, categoria=None, cocina=None, rating=None, rating_count=None,
         imagen=None, instrucciones=None, ingredientes=parsed,
     )
-    fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    fecha = datetime.now(UTC).isoformat(timespec="seconds")
     RecetaRepository(conn).upsert_receta(receta, fecha)
     conn.execute(
         "UPDATE recetas SET es_batchcooking = ?, rol = ?, es_favorita = ?, "

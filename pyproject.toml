@@ -1,6 +1,6 @@
 [project]
 name = "menu-app"
-version = "0.12.0"
+version = "0.13.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -61,4 +61,33 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.1.1",
     "pytest-httpx>=0.36.2",
+    "pytest-cov>=7.0",
+    "hypothesis>=6.140",
+    "ruff>=0.14",
+    "mypy>=1.19",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Set deliberadamente pequeño (Lote 9, #92): reglas de higiene baja-friccion.
+# Se puede ampliar progresivamente sin reescribir todo el codigo de golpe.
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # longitud de linea: ya la cubre el formateador, no un error duro
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+# Adopcion progresiva (Lote 9, #87): no se exige tipado estricto en todo el
+# repo de golpe; se activa modulo a modulo segun se vayan tipando.
+disallow_untyped_defs = false
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+markers = [
+    "live: golpea endpoints reales de Alcampo (excluir con -m 'not live')",
 ]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -17,8 +17,8 @@ from ..normalizacion.clasificacion import (
 )
 from ..normalizacion.limpieza import normalizar_producto
 from .db import get_connection, init_db
-from .repositorio import ProductoRepository
 from .reporte import resumen_por_categoria
+from .repositorio import ProductoRepository
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ def main(
         product_page_ttl_seconds=int(ingesta_cfg.get("product_page_ttl_hours", 6)) * 3600,
     )
 
-    ahora = datetime.now(timezone.utc)
+    ahora = datetime.now(UTC)
     fecha_extraccion = ahora.date().isoformat()
     fecha_actualizacion = ahora.isoformat(timespec="seconds")
 

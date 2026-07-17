@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from menu_app.carrito.alcampo import (
-    BASE_URL,
     _SEL_DECREMENTO,
     _SEL_INCREMENTO,
+    BASE_URL,
     ResultadoCarrito,
     ResultadoLinea,
     _normalizar_lineas,
@@ -21,7 +21,7 @@ def test_url_producto_fallback_y_dada():
 
 
 def test_normalizar_desde_lineacompra():
-    l = LineaCompra(
+    linea = LineaCompra(
         producto_id="511281",
         nombre="GOYA Aji amarillo",
         url=None,
@@ -31,7 +31,7 @@ def test_normalizar_desde_lineacompra():
         precio_unidad=3.5,
         total=7.0,
     )
-    out = _normalizar_lineas([l])
+    out = _normalizar_lineas([linea])
     assert len(out) == 1
     assert out[0].producto_id == "511281"
     assert out[0].unidades == 2

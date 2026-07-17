@@ -8,7 +8,7 @@ from __future__ import annotations
 import shutil
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MAX_BACKUPS_DEFECTO = 10
@@ -38,7 +38,7 @@ def crear_backup(db_path: Path, config_usuario_path: Path | None = None,
     carpeta = _carpeta_backups(db_path)
     # Microsegundos en el nombre: dos backups creados muy seguidos (p.ej. el de
     # seguridad justo antes de restaurar) no deben colisionar y sobrescribirse.
-    marca = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    marca = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     destino = carpeta / f"sazon-backup-{marca}.zip"
     with zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(db_path, arcname="menu.db")

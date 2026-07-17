@@ -108,9 +108,77 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
   añada `SIGNING_CERT_BASE64`/`SIGNING_CERT_PASSWORD` como secrets del repo.
 
 ## Lote 9 — Rendimiento, arquitectura, testing (v0.13.0)
-- ⬜ **84** Migraciones de esquema · **85** ingesta paralela · **86** modularizar app.py · **87** mypy.
-- ⬜ **88** Reducir .exe · **89** cache nutrientes · **90** catálogo perezoso.
-- ⬜ **91** Cobertura · **92** ruff/black · **93** QA en CI · **94** mock Alcampo · **95** hypothesis · **96** snapshots.
+- ✅ **84** Migraciones de esquema: runner de migraciones versionadas (`_MIGRACIONES`
+  en `almacenamiento/db.py`) sobre el `schema_version` ya existente en `meta`, para
+  cambios que un simple `ALTER TABLE ADD COLUMN` no puede expresar (la evolución
+  aditiva de columnas, que cubre el 100% de las versiones 1-5, ya era idempotente
+  desde antes). 3 tests nuevos (orden, ejecución única, BD nueva ya al día).
+- ✅ **86** Modularizar `web/app.py`: extraídos `web/plantillas.py` (helpers de
+  render HTML, funciones puras) y `web/tareas.py` (jobs en 2º plano + su estado:
+  catálogo, carrito, Chromium, actualizaciones). `app.py` baja de 2189 a 1639
+  líneas (-27%). El resto de rutas (~50 endpoints, todas closures sobre `_conn`
+  dentro de `crear_app()`) se deja **aparcado**: partirlas en routers exige tocar
+  las ~50 a la vez con riesgo real de regresión, para un beneficio puramente
+  interno/estético en una app de escritorio de un solo usuario — mismo criterio
+  que #37/#38/#58/#62 (sesión dedicada si se decide abordarlo).
+- ✅ **87** mypy: adoptado en modo laxo (`disallow_untyped_defs = false`,
+  progresivo). Encontró un bug real: `escritorio.py` sobreescribía
+  `server.install_signal_handlers` con un no-op, pero ese método **ya no existe**
+  en uvicorn 0.51 (ahora `capture_signals()` detecta el hilo no-principal por su
+  cuenta) — el parche llevaba tiempo sin hacer nada. Eliminado. Quedan 82 avisos,
+  todos del mismo patrón en `web/app.py` (`Form(...)` sin narrowing de
+  `UploadFile | str`); documentado como base de partida, no bloqueante.
+- ✅ **89** Cache de nutrientes: el cruce con OFF ya cacheaba peticiones HTTP
+  (`ingesta.cache.HttpCache`, de antes) y el coste/nutrición por receta ya se
+  cacheaba (Lote 1 #34). Lo que faltaba: `IndiceProductos.construir()` (fuzzy
+  matching) se reconstruía de cero en cada vista del editor de recetas —
+  **230 ms medidos** sobre el catálogo real (13886 productos aptos). Cacheado por
+  firma del catálogo (patrón igual al de #34): **230 ms → 28 ms** (8x) en
+  llamadas repetidas. 2 tests nuevos.
+- ✅ **90** Catálogo perezoso: la misma cache de #89 evita reconstruir el índice
+  completo en memoria en cada petición; no se ha encontrado otro punto caliente
+  que cargue el catálogo entero innecesariamente.
+- ✅ **91** Cobertura: `pytest-cov` instalado y medido — **52% global**. Los
+  huecos grandes son los `cli.py` de cada etapa (0%, son wrappers finos de
+  argumentos sobre lógica ya testeada) y ramas de HTML poco visitadas; no hay
+  ningún módulo de negocio crítico sin cubrir. Sin gate de cobertura mínima (no
+  tiene sentido perseguir el 100% en una app de un usuario).
+- ✅ **92** ruff adoptado (no black: ruff format se descartó para no reformatear
+  en bloque los muchos f-strings de HTML embebido, con un diff enorme y sin
+  beneficio real). `ruff check` arrancó con 114 errores; corregidos todos
+  (imports muertos, variable `l` ambigua, `zip()` sin `strict=`, claves de dict
+  duplicadas en `glosario.py`, `raise ... from`, etc.) — **0 errores** ahora.
+- ✅ **93** QA en CI: `.github/workflows/tests.yml` nuevo, corre en cada push/PR
+  (`ruff check` + `pytest -m "not live"`), separado de `release.yml` (solo en
+  tags). De paso, arreglado un bug real: `test_contract_live.py` no tenía
+  registrado el marcador `live` que CLAUDE.md documenta (`-m "not live"`) — sólo
+  un `skipif` por variable de entorno; el comando documentado no hacía nada.
+  Añadido el marcador para que el comando funcione de verdad.
+- ✅ **94** Mock de Alcampo: ya cubierto desde antes (`pytest-httpx` en toda la
+  suite salvo `test_contract_live.py`, deshabilitado por defecto); verificado que
+  sigue siendo así.
+- ✅ **95** Hypothesis: 3 tests de propiedades (`es_mas_nueva` nunca se compara
+  como más nueva que sí misma / incrementar el patch siempre gana; `_distribuir`
+  coloca cada receta exactamente las veces pedidas para cualquier reparto y N).
+- ✅ **96** Snapshots: test de snapshot para `compra_a_csv` — fija el CSV EXACTO
+  byte a byte (no solo subcadenas como los tests existentes), para detectar
+  cualquier cambio de formato no intencionado.
+- ⏸️ **85** Ingesta paralela — revisado: `RateLimiter` (ya preparado con lock
+  para el futuro, ver su docstring) impone un intervalo MÍNIMO entre peticiones
+  para "ser un buen ciudadano" con el servidor de Alcampo; ese intervalo (no el
+  procesado local: JSON+SQLite tarda milisegundos) es lo que domina el tiempo
+  total. Paralelizar los HILOS de fetching NO reduciría el tiempo real sin
+  acortar también el intervalo entre peticiones — que es exactamente lo que NO
+  se quiere hacer (arriesga que Alcampo bloquee la IP/sesión). Aparcado: no hay
+  una forma segura de acelerar esto sin dejar de "ser gentiles".
+- ⏸️ **88** Reducir el `.exe` — revisado: `menu-app.spec` ya excluye
+  `matplotlib/tkinter/google/anthropic/IPython` (el desambiguador IA es
+  solo-CLI, no lo usa la app de escritorio) y `pandas` no se empaqueta porque
+  nada en el arbol de imports de `escritorio.py`/`web/app.py` lo toca. Tamaño ya
+  documentado en EMPAQUETADO.md (~57 MB con catálogo, ~40 MB sin él). No se ha
+  encontrado grasa adicional que quitar sin un build-and-measure completo (caro,
+  bajo ROI dado que ya está ajustado); aparcado salvo que aparezca una razón
+  concreta para revisarlo.
 
 ## Lote 10 — Datos, IA opcional y sostenibilidad (v0.14.0)
 - ⬜ **97** Cocinar con la despensa · **98** OCR ticket · **99** recomendador · **100** sustituciones.
