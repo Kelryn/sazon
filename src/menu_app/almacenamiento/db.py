@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -230,6 +231,27 @@ def _aplicar_migraciones(conn: sqlite3.Connection) -> None:
         _MIGRACIONES[version](conn)
 
 
+def _activar_wal(conn: sqlite3.Connection) -> None:
+    """Activa journal_mode=WAL con reintentos.
+
+    Cambiar de modo por primera vez en un fichero recien creado pide un lock
+    exclusivo breve; si dos conexiones lo intentan a la vez (p.ej. una tarea de
+    fondo arrancando justo cuando llega la primera peticion web), SQLite puede
+    fallar al instante con "database is locked" SIN respetar `busy_timeout`
+    para este PRAGMA en concreto (limitacion conocida, no es un bug nuestro).
+    Reintenta con backoff corto en vez de tumbar el arranque."""
+    espera = 0.05
+    for intento in range(20):
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+            return
+        except sqlite3.OperationalError as e:
+            if "locked" not in str(e).lower() or intento == 19:
+                raise
+            time.sleep(espera)
+            espera = min(0.5, espera * 1.5)
+
+
 def get_connection(db_path: str | Path) -> sqlite3.Connection:
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,7 +261,7 @@ def get_connection(db_path: str | Path) -> sqlite3.Connection:
     # WAL + busy_timeout: permite que un proceso lea/escriba mientras otro
     # (p.ej. el enriquecimiento en segundo plano) esta escribiendo, sin
     # "database is locked".
-    conn.execute("PRAGMA journal_mode = WAL")
+    _activar_wal(conn)
     conn.execute("PRAGMA busy_timeout = 30000")
     return conn
 
@@ -262,9 +284,18 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def _migrar_columnas(conn: sqlite3.Connection) -> None:
-    """Añade columnas que falten (BD creada con una version anterior del esquema)."""
+    """Añade columnas que falten (BD creada con una version anterior del esquema).
+
+    Tolera la carrera entre dos `init_db()` concurrentes sobre el mismo fichero
+    (p.ej. una tarea de fondo y la primera peticion web arrancando a la vez):
+    si otra conexion ya añadio la columna entre el PRAGMA y el ALTER, ignora el
+    "duplicate column name" en vez de tumbar el arranque."""
     for tabla, columnas in _COLUMNAS_EVOLUTIVAS.items():
         existentes = {row["name"] for row in conn.execute(f"PRAGMA table_info({tabla})")}
         for columna, tipo in columnas:
             if columna not in existentes:
-                conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+                try:
+                    conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column name" not in str(e):
+                        raise

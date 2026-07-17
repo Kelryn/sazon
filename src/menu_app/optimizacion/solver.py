@@ -42,6 +42,8 @@ class RecetaOpt:
     procesado: float = 0.0  # fraccion 0..1 de gramos ultraprocesados (NOVA 4) (#3)
     estacionalidad: float = 0.0  # 0..1: fraccion de productos de temporada este mes (#11)
     calidad: float = 0.5  # 0..1: calidad de la ficha (instrucciones, nº ingr., ratings) (#49)
+    despensa: float = 0.0  # 0..1: fraccion de ingredientes que ya tienes en casa (#97)
+    festivo: float = 0.0  # 0/1: el titulo encaja con el tema del mes (Navidad/verano...) (#110)
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de
@@ -189,6 +191,8 @@ def optimizar_comida_cena(
     peso_salud: float = 0.0,
     peso_ultraprocesado: float = 0.0,
     peso_estacionalidad: float = 0.0,
+    peso_despensa: float = 0.0,
+    peso_festivo: float = 0.0,
     peso_sobra: float = 0.0,
     productos_formato: dict[str, float] | None = None,
     max_familia_libre: int = 2,
@@ -269,6 +273,8 @@ def optimizar_comida_cena(
     def _bonus_comida(r: RecetaOpt) -> float:
         bonus = peso_palatabilidad * r.palatabilidad + peso_salud * r.salud
         bonus += peso_estacionalidad * r.estacionalidad  # premia temporada (#11)
+        bonus += peso_despensa * r.despensa  # premia usar lo que ya tienes (#97)
+        bonus += peso_festivo * r.festivo  # premia el tema de temporada/festivo (#110)
         bonus += 0.3 * r.calidad  # desempate fijo por calidad de la ficha (#49)
         bonus -= peso_ultraprocesado * r.procesado  # penaliza ultraprocesados (#3)
         if r.es_favorita:

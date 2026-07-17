@@ -2,6 +2,10 @@
 
 # --- Menu y comensales (Fase 5) ---
 num_comensales: 2
+# Modo familiar (#108): de los comensales de arriba, cuantos son niños (comen
+# una fraccion de racion de adulto). 0 = todos adultos, sin cambios.
+ninos: 0
+factor_racion_infantil: 0.6  # fraccion de racion de adulto que come un niño
 kcal_por_comensal: 2000
 # Perfil corporal para calcular las kcal automaticamente (#4/#5). Si
 # calcular_kcal_auto=true, kcal_por_comensal se deriva de estos datos (Mifflin-St Jeor
@@ -52,6 +56,12 @@ estacionalidad_pct: 0                   # preferir TEMPORADA 0-100: premia fruta
                                         # del mes actual (mas baratas y sabrosas). 0 = off. (#11)
 # mes_temporada: 0                      # (opcional) fija el mes 1-12 para la temporada;
                                         # 0/omitido = mes actual.
+despensa_pct: 0                         # cocinar con la DESPENSA 0-100: premia recetas que
+                                        # usan ingredientes de la lista `despensa` de abajo
+                                        # (los que ya tienes en casa). 0 = off. (#97)
+festivo_pct: 0                          # temporada FESTIVA 0-100: premia recetas cuyo titulo
+                                        # encaja con el tema del mes (Navidad en diciembre;
+                                        # barbacoa/platos frios en verano). 0 = off. (#110)
 sobra_pct: 0                            # reducir SOBRAS 0-100: prefiere menus que aprovechan
                                         # el formato comprado (menos desperdicio). Sube el
                                         # tiempo de calculo (hasta ~25s). 0 = desactivado. (#23)
@@ -60,6 +70,10 @@ tiempo_max_receta_min: 0                # descarta recetas que tarden mas de N m
 # Presupuesto maximo por SEMANA en euros (tope duro). 0 = sin tope. Si choca con los
 # suelos de nutrientes puede hacer el menu infactible.
 presupuesto_max_semana: 0
+# Alternativa a la de arriba: presupuesto por COMENSAL y semana (#113). Si es >0,
+# MANDA sobre presupuesto_max_semana y se multiplica por num_comensales (el tope
+# se ajusta solo si cambia el tamaño del hogar). 0 = usar presupuesto_max_semana.
+presupuesto_max_por_comensal_semana: 0
 # Ingredientes que NO quieres en el menu (lista negra): se excluye la receta si alguno
 # de sus ingredientes contiene uno de estos terminos. Ej: [higado, coliflor, cilantro].
 ingredientes_excluidos: []
@@ -92,8 +106,9 @@ grupos_alimentos:
   maximo_semana:
     carne_roja: 3
 
-# Despensa: ingredientes que sueles tener en casa y NO quieres en la lista de la
-# compra (se casan por nombre de producto; p.ej. sal, aceite, especias).
+# Despensa: ingredientes que sueles tener en casa. Se usan en DOS sitios: (1) no
+# aparecen en la lista de la compra (se casan por nombre de producto), y (2) si
+# despensa_pct > 0, el generador de menu PRIORIZA recetas que los usen (#97).
 despensa:
   - sal
   - aceite de oliva
@@ -177,6 +192,13 @@ actualizaciones:
 backups_automaticos: true  # copia de seguridad de BD+config al arrancar (#80)
 telemetria_local: false    # diagnostico de errores 100% LOCAL, opt-in (#81); no
                           # envia nada por red (Sazon no tiene servidor propio)
+
+# Catálogo programado (#116): al arrancar, Sazón comprueba cuántos días lleva el
+# catálogo sin actualizarse. catalogo_auto_actualizar=false (por defecto) solo lo
+# AVISA en el menú; puesto a true, lo actualiza SOLO en 2º plano al superar el umbral
+# (tarda y golpea la web de Alcampo, por eso no es el comportamiento por defecto).
+catalogo_dias_alerta: 7
+catalogo_auto_actualizar: false
 
 off:
   # Cruce con Open Food Facts (por nombre+marca, ya que Alcampo no da EAN):

@@ -14,7 +14,7 @@ from collections import deque
 from pathlib import Path
 
 from ..actualizaciones import _es_ejecutable_congelado, hay_actualizacion, pre_descargar
-from ..almacenamiento.actualizar import actualizar_catalogo
+from ..almacenamiento.actualizar import actualizar_catalogo, dias_desde_ultima_actualizacion
 from ..almacenamiento.db import get_connection, init_db
 from ..carrito import anadir_al_carrito, instalar_chromium, playwright_disponible
 from ..configuracion import cargar_config
@@ -127,6 +127,28 @@ def _lanzar_actualizacion(cfg: dict, categorias: list[str] | None = None) -> boo
 
     threading.Thread(target=_correr, daemon=True).start()
     return True
+
+
+# Antigüedad del catálogo detectada al arrancar (#116): None = aun sin comprobar.
+_CATALOGO_ANTIGUEDAD: dict = {"dias": None}
+
+
+def comprobar_catalogo_desactualizado(cfg: dict) -> None:
+    """Comprueba al arrancar cuantos dias lleva el catalogo sin actualizarse
+    (#116). Si supera `catalogo_dias_alerta` (7 por defecto) y
+    `catalogo_auto_actualizar` esta activado, lanza la actualizacion sola en 2º
+    plano; si no, solo lo guarda para mostrar un aviso en el menu."""
+    db_path = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+    conn = get_connection(db_path)
+    try:
+        init_db(conn)
+        dias = dias_desde_ultima_actualizacion(conn)
+    finally:
+        conn.close()
+    _CATALOGO_ANTIGUEDAD["dias"] = dias
+    umbral = int(cfg.get("catalogo_dias_alerta", 7) or 7)
+    if dias is not None and dias >= umbral and cfg.get("catalogo_auto_actualizar", False):
+        _lanzar_actualizacion(cfg)
 
 
 def _lanzar_carrito(config_path, sincronizar: bool = False, vaciar_antes: bool = False) -> tuple[bool, str]:

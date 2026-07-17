@@ -30,6 +30,36 @@ def test_migracion_pendiente_se_ejecuta_una_sola_vez(tmp_path: Path, monkeypatch
     assert db_mod._version_guardada(conn) == db_mod.SCHEMA_VERSION
 
 
+class _ConexionPragmaDesfasado:
+    """Envoltorio que simula un PRAGMA table_info() leido ANTES de que otra
+    conexion confirmase su ALTER TABLE (condicion de carrera real): dice que
+    'es_favorita' falta, pero el ALTER TABLE de verdad choca con la columna
+    real de la BD subyacente."""
+
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, *args, **kwargs):
+        if sql.startswith("PRAGMA table_info(recetas)"):
+            return [r for r in self._conn.execute(sql) if r["name"] != "es_favorita"]
+        return self._conn.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, nombre):
+        return getattr(self._conn, nombre)
+
+
+def test_migrar_columnas_tolera_columna_ya_anadida_por_otra_conexion(tmp_path: Path):
+    """Regresion: dos init_db() concurrentes sobre el mismo fichero (p.ej. una
+    tarea de fondo arrancando a la vez que la primera peticion web) pueden ver
+    ambas la columna como "falta" antes de que la otra confirme su ALTER TABLE.
+    _migrar_columnas debe ignorar el 'duplicate column name' resultante en vez
+    de tumbar el arranque."""
+    conn = get_connection(tmp_path / "test.db")
+    init_db(conn)  # todas las columnas evolutivas ya existen de verdad
+
+    db_mod._migrar_columnas(_ConexionPragmaDesfasado(conn))  # no debe lanzar
+
+
 def test_migraciones_se_aplican_en_orden(tmp_path: Path, monkeypatch):
     conn = get_connection(tmp_path / "test.db")
     conn.execute(

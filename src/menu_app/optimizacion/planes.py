@@ -217,7 +217,10 @@ def generar_plan(
     n = int(n_semanas if n_semanas is not None else cfg.get("semanas_plan", 1))
     n = max(1, n)
     ventana = semanas_exclusion(cfg)
-    plan_id = datetime.now(UTC).strftime("plan-%Y%m%d-%H%M%S")
+    # Microsegundos en el nombre: dos generaciones dentro del mismo segundo (dos
+    # clics rapidos, o un script) no deben colisionar y pisarse el plan_id
+    # (mismo bug ya visto y corregido en backups.py, Lote 8 #80).
+    plan_id = datetime.now(UTC).strftime("plan-%Y%m%d-%H%M%S-%f")
 
     # Rotacion multi-semana (#28): parte del histórico de planes anteriores, para no
     # repetir lo cocinado en las ultimas `ventana` semanas aunque sea un plan nuevo.
@@ -269,3 +272,91 @@ def regenerar_semana(
     )
     guardar_semana(conn, plan_id, semana, res, batchcooking=batchcooking)
     return res
+
+
+def listar_planes(conn: sqlite3.Connection) -> list[dict]:
+    """Historial de planes generados (#109): uno por plan_id, mas recientes primero,
+    con nº de semanas y coste total sumado (para elegir cual repetir)."""
+    filas = conn.execute(
+        "SELECT plan_id, semana, creado, datos FROM planes ORDER BY creado"
+    ).fetchall()
+    por_plan: dict[str, dict] = {}
+    for f in filas:
+        p = por_plan.setdefault(
+            f["plan_id"], {"plan_id": f["plan_id"], "creado": f["creado"],
+                           "n_semanas": 0, "coste_total": 0.0}
+        )
+        p["creado"] = min(p["creado"], f["creado"])
+        p["n_semanas"] += 1
+        p["coste_total"] += float(json.loads(f["datos"]).get("coste_total") or 0.0)
+    planes = list(por_plan.values())
+    for p in planes:
+        p["coste_total"] = round(p["coste_total"], 2)
+    # Orden por creado Y plan_id: 'creado' solo tiene resolucion de segundos
+    # (guardar_semana), asi que dos planes generados en el mismo segundo empatan;
+    # el plan_id (con microsegundos, ver generar_plan) desempata de forma estable.
+    planes.sort(key=lambda p: (p["creado"], p["plan_id"]), reverse=True)
+    return planes
+
+
+def repetir_semana(
+    conn: sqlite3.Connection,
+    origen_plan_id: str, origen_semana: int,
+    destino_plan_id: str, destino_semana: int,
+) -> bool:
+    """Reutiliza una semana YA GENERADA de un plan anterior como una semana nueva
+    de otro plan (#109: "repetir semana pasada"). Devuelve False si el origen no
+    existe. No vuelve a resolver el MILP: copia la semana tal cual se sirvió."""
+    fila = conn.execute(
+        "SELECT datos FROM planes WHERE plan_id = ? AND semana = ?",
+        (origen_plan_id, origen_semana),
+    ).fetchone()
+    if fila is None:
+        return False
+    conn.execute(
+        "INSERT INTO planes (plan_id, semana, creado, datos) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(plan_id, semana) DO UPDATE SET datos = excluded.datos, creado = excluded.creado",
+        (destino_plan_id, destino_semana, datetime.now(UTC).isoformat(timespec="seconds"), fila["datos"]),
+    )
+    conn.commit()
+    return True
+
+
+# Version del formato de exportacion (#114): permite detectar ficheros de una
+# version futura incompatible si el formato cambia mas adelante.
+_FORMATO_EXPORTACION = 1
+
+
+def exportar_plan_json(conn: sqlite3.Connection, plan_id: str) -> bytes | None:
+    """Serializa un plan completo (todas sus semanas) para compartirlo como un
+    fichero .json (#114). None si el plan no existe."""
+    _pid, semanas = cargar_plan(conn, plan_id)
+    if not semanas:
+        return None
+    return json.dumps(
+        {"formato": _FORMATO_EXPORTACION, "plan_id_original": plan_id, "semanas": semanas},
+        ensure_ascii=False, indent=2,
+    ).encode("utf-8")
+
+
+def importar_plan_json(conn: sqlite3.Connection, contenido: bytes) -> str | None:
+    """Importa un plan exportado con `exportar_plan_json` como un plan NUEVO
+    (#114: compartir menús entre usuarios/instalaciones). Devuelve el plan_id
+    nuevo, o None si el fichero no tiene el formato esperado."""
+    try:
+        datos = json.loads(contenido.decode("utf-8"))
+        semanas = datos["semanas"]
+        if not semanas:
+            return None
+    except (ValueError, KeyError, UnicodeDecodeError):
+        return None
+    plan_id = datetime.now(UTC).strftime("plan-importado-%Y%m%d-%H%M%S-%f")
+    ahora = datetime.now(UTC).isoformat(timespec="seconds")
+    for semana, contenido_semana in semanas.items():
+        conn.execute(
+            "INSERT INTO planes (plan_id, semana, creado, datos) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(plan_id, semana) DO UPDATE SET datos = excluded.datos, creado = excluded.creado",
+            (plan_id, int(semana), ahora, json.dumps(contenido_semana, ensure_ascii=False)),
+        )
+    conn.commit()
+    return plan_id

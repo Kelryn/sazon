@@ -14,6 +14,7 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from ..matching.matcher import IndiceProductos, MatcherLexico
+from ..matching.normalizar import quitar_acentos
 from ..optimizacion.economia_recetas import _gramos_por_piezas
 from .planes import cargar_plan
 
@@ -21,6 +22,22 @@ _COLS_PRODUCTO = (
     "nombre, url_producto, precio_eur, cantidad_base_g_ml, categoria, subcategoria, "
     "disponible, en_oferta, precio_oferta"
 )
+
+# Minimizar desperdicio (#105): sin datos reales de caducidad (Alcampo no los
+# publica por producto), se aproxima la perecedera por el NOMBRE del pasillo
+# (subcategoria/categoria de Alcampo, ver LineaCompra.pasillo).
+_PALABRAS_PERECEDERO = (
+    "verdura", "hortaliza", "fruta", "carne", "pescado", "marisco", "molusco",
+    "charcuteria", "panaderia", "pasteleria", "queso", "lacteo", "leche",
+    "huevo", "yogur", "ahumado",
+)
+
+
+def es_pasillo_perecedero(pasillo: str) -> bool:
+    """True si el pasillo/subcategoria es de productos frescos/perecederos
+    (aproximado por nombre, ver _PALABRAS_PERECEDERO)."""
+    texto = quitar_acentos(pasillo or "")
+    return any(palabra in texto for palabra in _PALABRAS_PERECEDERO)
 
 
 @dataclass
@@ -75,11 +92,14 @@ class Compra:
         return sum(1 for linea in self.lineas if linea.sustituido)
 
     def por_pasillo(self) -> dict[str, list[LineaCompra]]:
-        """Lineas agrupadas por pasillo/categoria (para la lista de la compra)."""
+        """Lineas agrupadas por pasillo/categoria (para la lista de la compra),
+        con los PERECEDEROS al final (#105): minimiza el tiempo que pasan fuera
+        de la nevera comprándolos lo último. Sin datos reales de caducidad (el
+        catálogo de Alcampo no los da), se aproxima por categoría/subcategoría."""
         grupos: dict[str, list[LineaCompra]] = {}
         for linea in self.lineas:
             grupos.setdefault(linea.pasillo, []).append(linea)
-        return dict(sorted(grupos.items()))
+        return dict(sorted(grupos.items(), key=lambda kv: (es_pasillo_perecedero(kv[0]), kv[0])))
 
 
 def _necesidades_gramos(

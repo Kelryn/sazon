@@ -100,3 +100,19 @@ def actualizar_catalogo(
         f"{resumen['cambios_precio']} cambios de precio)."
     )
     return resumen
+
+
+def dias_desde_ultima_actualizacion(conn) -> int | None:
+    """Días desde que se actualizó por última vez CUALQUIER producto del
+    catálogo (#116). None si el catálogo está vacío (nunca se ha cargado)."""
+    fila = conn.execute("SELECT MAX(fecha_actualizacion) FROM productos").fetchone()
+    ultima = fila[0] if fila else None
+    if not ultima:
+        return None
+    try:
+        fecha = datetime.fromisoformat(ultima)
+    except ValueError:
+        return None
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=UTC)
+    return max(0, (datetime.now(UTC) - fecha).days)

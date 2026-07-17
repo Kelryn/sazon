@@ -121,8 +121,8 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
 <header><a href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG.replace('<svg', '<svg class="logo"', 1)}</a>
 <nav><a href="/">Menú</a><a href="/compra">Lista de la compra</a>
 <a href="/recetas">Recetas</a><a href="/catalogo">Catálogo</a>
-<a href="/buscar">Buscar</a><a href="/matching">Correcciones</a>
-<a href="/dashboard">Dashboard</a><a href="/config">Configuración</a>
+<a href="/buscar">Buscar</a><a href="/sustituciones">Sustituciones</a><a href="/matching">Correcciones</a>
+<a href="/historial">Historial</a><a href="/dashboard">Dashboard</a><a href="/config">Configuración</a>
 <button class="btn mini sec" type="button" onclick="alternarTema()" title="Cambiar tema claro/oscuro" aria-label="Cambiar entre tema claro y oscuro" style="margin-left:6px">🌓</button>
 </nav></header>
 <main id="contenido">{cuerpo}</main></body></html>"""
@@ -135,7 +135,7 @@ def _fila_nutrientes(datos: dict, cfg: dict) -> str:
     """Tabla de nutrientes POR PERSONA Y DIA (total/dia y objetivo/dia)."""
     dias = int(datos.get("dias", 7))
     tot = datos.get("nutricion_total", {}) or {}
-    num_com = int(datos.get("num_comensales", 2))
+    num_com = float(datos.get("num_comensales", 2))  # adultos-equivalentes (#108)
     cfg_nut = config_nutricion(cfg)
     bandas = {b.nutriente: b for b in objetivos_semanales(cfg_nut, num_com)}
     div = dias * num_com  # de total del menu a "por persona y dia"

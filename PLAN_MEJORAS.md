@@ -181,12 +181,114 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
   concreta para revisarlo.
 
 ## Lote 10 — Datos, IA opcional y sostenibilidad (v0.14.0)
-- ⬜ **97** Cocinar con la despensa · **98** OCR ticket · **99** recomendador · **100** sustituciones.
-- ⬜ **101** Explicación NL (IA opc.) · **102** chat (IA opc.) · **103** predicción de gasto.
-- ⬜ **105** Anti-desperdicio · **106** usa lo que caduca · **107** multi-perfil · **108** raciones infantiles.
-- ⬜ **109** Historial/repetir · **110** temporada/festivos · **111** export fitness/listas · **112** cupones.
-- ⬜ **113** Presupuesto por comensal · **114** compartir menús · **115** despensa básica.
-- ⬜ **116** Catálogo programado · **117** re-match descatalogados · **118** avisar subidas · **119** cobertura fibra · **120** validación de datos.
+- ✅ **97** Cocinar con la despensa: nueva dimensión del solver (`despensa_pct`,
+  0-100, off por defecto) que premia recetas cuyos ingredientes están en tu
+  lista `despensa` (la misma que ya evitaba comprarlos otra vez). Editable
+  desde `/config` (antes solo se podía tocar en el YAML).
+- ✅ **100** Asistente de sustituciones: tabla curada de sustituciones
+  CULINARIAS (no "otro producto del catálogo", eso ya lo resuelve #53) —
+  "no tengo nata, ¿por qué la cambio?" → leche evaporada, yogur griego...
+  Página nueva `/sustituciones` con buscador.
+- ✅ **109** Historial de menús y "repetir semana pasada": `/historial` lista
+  todos los planes generados (fecha, semanas, coste); cada plan antiguo se
+  puede ver de solo-lectura y "repetir" una semana suya como semana nueva del
+  plan actual. De paso, **bug real corregido**: el `plan_id` solo tenía
+  resolución de segundo (`plan-%Y%m%d-%H%M%S`) — dos planes generados en el
+  mismo segundo colisionaban y se pisaban, igual que el bug de backups del
+  Lote 8; ahora lleva microsegundos.
+- ✅ **110** Menús por temporada/festivos: nueva dimensión del solver
+  (`festivo_pct`) que premia recetas cuyo TÍTULO encaja con el tema del mes
+  (Navidad en diciembre; barbacoa/gazpacho en verano) — verificado que el
+  corpus real SÍ tiene recetas de cada tema (18 de Navidad, 30 de gazpacho...).
+- ✅ **113** Presupuesto por comensal: `presupuesto_max_por_comensal_semana`
+  (manda sobre el tope plano semanal si está puesto) escala solo con
+  `num_comensales`.
+- ✅ **114** Compartir menús: exportar un plan completo a `.json` desde
+  `/historial/{id}` e importarlo en otra instalación de Sazón como plan nuevo.
+- ✅ **115** Despensa básica ("comprar solo lo que falta"): ya estaba cubierto
+  desde antes por la lista `despensa` de `optimizacion/compra.py` (excluye de
+  la compra lo que ya tienes); no había nada más que añadir.
+- ✅ **116** Catálogo programado: al arrancar, Sazón mide cuántos días lleva el
+  catálogo sin actualizarse (**por CATEGORÍA**, no un valor global — las
+  categorías se refrescan por separado desde `/catalogo`). Por defecto solo
+  AVISA en el menú; `catalogo_auto_actualizar` (opt-in, `/config`) lo
+  refresca solo en 2º plano al superar el umbral. Bug real encontrado y
+  corregido durante el desarrollo: la primera versión comparaba contra el
+  máximo GLOBAL de fecha_actualizacion, lo que marcaba categorías enteras sin
+  tocar como "descatalogadas" solo por no haberse refrescado el mismo día que
+  otra. Además, esta nueva tarea de fondo (una más entre las que ya arrancan
+  al abrir la app) destapó una **condición de carrera real y preexistente**
+  en `get_connection()`: dos conexiones activando `PRAGMA journal_mode=WAL`
+  a la vez sobre un fichero recién creado podían fallar al instante con
+  "database is locked" — ese PRAGMA en concreto no respeta `busy_timeout` al
+  cambiar de modo (limitación conocida de SQLite). Corregido con reintentos
+  con backoff (`_activar_wal`); verificado con 35 ejecuciones seguidas de la
+  suite completa sin fallos (antes del arreglo, fallaba de forma intermitente
+  en 2-5 de cada 15-16).
+- ✅ **117** Detección de descatalogados + re-match automático: mismo
+  descubrimiento que #116 (`actualizar_catalogo` nunca borra productos; un
+  descatalogado se reconoce por quedarse con una fecha más antigua que su
+  categoría) — botón en `/matching` que re-empareja con el mejor sustituto
+  VIGENTE. Optimizada tras medir contra el catálogo real: la primera versión
+  de la consulta tardaba **14 segundos** (subconsulta correlacionada); reescrita
+  con un JOIN a una tabla derivada, baja a **21 ms**.
+- ✅ **118** Aviso de subida de precio: compara los dos últimos puntos de
+  `precios_historico` (ya existía desde antes, solo faltaba usarlo) y avisa en
+  `/compra` de subidas ≥8% en productos de la lista actual.
+- ✅ **120** Validación de datos: `/catalogo/validar` señala precios/nutrientes
+  físicamente imposibles (negativos, oferta más cara que el normal, >900
+  kcal/100g, macros que suman más de 100 g, fibra mayor que los hidratos) para
+  revisión manual — **no corrige nada solo**. Se descartó un detector de
+  precios "atípicos" por subcategoría (ratio frente a la mediana): medido
+  contra el catálogo real, incluso con un factor de 50x seguía marcando ~60
+  productos como falsos positivos (sal vs. azafrán en "Especias" son ambos
+  legítimos). Verificado contra el catálogo real: 172 problemas genuinos
+  encontrados (168 de ellos la inconsistencia fibra/hidratos).
+- ✅ **105** Minimizar desperdicio: sin datos reales de caducidad (Alcampo no
+  los publica), se aproxima la perecedera por categoría/subcategoría
+  (verduras, carnes, pescados, lácteos, panadería...) y se reordena la lista
+  de la compra para comprarlos LO ÚLTIMO, con una insignia 🧊 en `/compra`.
+- ✅ **108** Raciones infantiles / modo familiar: `ninos` +
+  `factor_racion_infantil` (60% por defecto) convierten el hogar en
+  "adultos-equivalentes" para escalar nutrientes/coste/cantidades — 2 adultos
+  + 2 niños ya no compran ni planifican como 4 adultos completos.
+- ⏸️ **98** OCR de ticket/despensa por foto — requiere una librería externa de
+  reconocimiento óptico (Tesseract u otra); mismo criterio que el OCR de
+  recetas aparcado en el Lote 5 (#43).
+- ⏸️ **99** Recomendador por afinidad — depende del sistema de valoraciones
+  propias, que es exactamente el Lote 12 (aún no implementado); no tiene
+  sentido construir un recomendador antes de tener la señal que debe aprender.
+- ⏸️ **101** Explicación nutricional en lenguaje natural (IA opcional) · **102**
+  chat opcional — ambas tocarían el flujo de IA opcional (cliente Claude/Gemini,
+  ya existente solo para desambiguación de matching); un chat de "hazme la
+  semana más barata" es además un proyecto de NLU con alcance grande (parsear
+  instrucciones libres a cambios de config/solver de forma fiable). Se aparcan
+  juntas para una sesión dedicada, mismo criterio que #37/#38/#58/#62.
+- ⏸️ **106** Modo "usa lo que caduca antes" — la lista `despensa` solo guarda
+  NOMBRES, no fechas de caducidad; implementarlo de verdad exigiría pedirle al
+  usuario que introduzca la fecha de caducidad de cada cosa que tiene en casa,
+  una carga de entrada de datos desproporcionada para el valor que aporta.
+- ⏸️ **107** Multi-perfil/hogar (varias personas con objetivos distintos a la
+  vez) — cambio de arquitectura grande (un solver por perfil, o un modelo
+  multi-objetivo por persona); mismo criterio que el rediseño del modelo
+  por-día (#37/#38): sesión dedicada si se decide abordarlo.
+- ⏸️ **111** Exportar a apps de fitness (MyFitnessPal...) y listas (Google
+  Keep, Todoist) — integraciones con APIs de terceros que requieren OAuth y
+  gestión de cuentas vinculadas; alcance grande, aparcado.
+- ⏸️ **112** Cupones de Alcampo aplicados automáticamente — distinto de las
+  OFERTAS ya cubiertas (#57/#59, precio de oferta ya visible y aplicado): los
+  cupones normalmente se "activan" en la cuenta antes de pagar, lo que exigiría
+  nuevos selectores de Playwright verificados EN VIVO contra el sitio real
+  (mismo cuidado que el resto de automatización del carrito); se aparca hasta
+  poder verificarlo en vivo con el usuario.
+- ⏸️ **119** Cobertura del dato de fibra/nutrientes vía OFF — el código para
+  cruzar con Open Food Facts ya existe (`menu-app-cruzar-off`) y funciona; lo
+  que falta es EJECUTARLO contra el catálogo completo (13886 productos) por su
+  API en vivo, con el rate-limit "buen ciudadano" ya configurado — eso es una
+  tarea operativa de horas, no un cambio de código. Medido: el cruce solo se ha
+  corrido sobre 29 productos de prueba hasta ahora. Se deja para que el usuario
+  la lance cuando quiera (no arrancar un job largo contra una API de terceros
+  sin que lo pida explícitamente).
 
 ## Lote 11 — Rediseño completo GUIADO por el usuario (v0.15.0) *(petición usuario)*
 Rediseño **integral** de la interfaz, dirigido por el usuario: se le preguntará

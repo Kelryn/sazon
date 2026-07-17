@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 
 from ..configuracion import DIAS_SEMANA as _DIAS_SEMANA
 from ..configuracion import dias_batchcooking as _dias_bc_cfg
+from ..matching.normalizar import quitar_acentos
+from .despensa import puntua_despensa
 from .economia_recetas import calcular_todas
 from .estacionalidad import puntua_estacionalidad
 from .grupos_alimentos import grupo_receta
@@ -25,6 +27,7 @@ from .nutrientes import (
 )
 from .palatabilidad import palatabilidad_bayesiana
 from .solver import MenuOptimizado, RecetaOpt, optimizar_comida_cena
+from .temporada_festiva import puntua_temporada_festiva
 
 # Cobertura minima de ingredientes para fiarnos del coste/nutricion de una receta
 # (sobrescribible con cobertura_minima en config.yaml).
@@ -48,6 +51,11 @@ _PESOS_PCT = {
     "evitar_procesados_pct": ("peso_ultraprocesado", 8.0, 0),
     # Preferir productos de TEMPORADA (frutas/verduras del mes): 0 = desactivado (#11).
     "estacionalidad_pct": ("peso_estacionalidad", 6.0, 0),
+    # Priorizar recetas que usan lo que ya tienes en la despensa: 0 = desactivado (#97).
+    "despensa_pct": ("peso_despensa", 6.0, 0),
+    # Priorizar recetas del tema de temporada/festivo del mes (Navidad, verano,
+    # barbacoa...): 0 = desactivado (#110).
+    "festivo_pct": ("peso_festivo", 4.0, 0),
 }
 
 
@@ -86,8 +94,6 @@ _FAMILIA_IGNORA = {
 def familia_receta(titulo: str) -> str:
     """Tipo de plato = primera palabra significativa del titulo (para la variedad):
     'Receta de Salmorejo de naranja' -> 'salmorejo'; agrupa las variantes."""
-    from ..matching.normalizar import quitar_acentos
-
     for token in quitar_acentos(titulo or "").replace(",", " ").split():
         if token.isalpha() and token not in _FAMILIA_IGNORA and len(token) > 2:
             return token
@@ -225,6 +231,31 @@ def _max_repeticiones_semana(cfg: dict) -> int:
     return max(1, round(7 / dias_rep))
 
 
+def comensales_equivalentes(cfg: dict) -> float:
+    """Adultos-equivalentes para escalar nutrientes/coste/cantidades (#108, modo
+    familiar): los niños (`ninos`) comen una fraccion de racion de adulto
+    (`factor_racion_infantil`, 0.6 por defecto = 60%). Sin niños configurados,
+    devuelve el nº de comensales tal cual (comportamiento identico a antes)."""
+    total = int(cfg.get("num_comensales", 2))
+    ninos = max(0, min(int(cfg.get("ninos", 0) or 0), total))
+    if not ninos:
+        return float(total)
+    factor = float(cfg.get("factor_racion_infantil", 0.6))
+    adultos = total - ninos
+    return max(1.0, round(adultos + ninos * factor, 2))
+
+
+def presupuesto_max_efectivo(cfg: dict, num_comensales: int) -> float | None:
+    """Tope de gasto semanal (#113): si `presupuesto_max_por_comensal_semana` esta
+    fijado (>0), manda sobre `presupuesto_max_semana` y escala con el nº de
+    comensales (asi el tope se ajusta solo si cambia el tamaño del hogar).
+    0/ausente en ambos = sin tope."""
+    por_comensal = float(cfg.get("presupuesto_max_por_comensal_semana", 0) or 0)
+    if por_comensal > 0:
+        return por_comensal * max(1, num_comensales)
+    return float(cfg.get("presupuesto_max_semana", 0) or 0) or None
+
+
 def semanas_exclusion(cfg: dict) -> int:
     """Cuantas semanas ANTERIORES vetan una receta (dias_repeticion > 7)."""
     dias_rep = int(cfg.get("dias_repeticion", 7))
@@ -239,7 +270,7 @@ def generar_menu(
     excluidas: frozenset[str] = frozenset(),
     corte: set[str] | None = None,
 ) -> ResultadoMenu:
-    num_comensales = int(cfg.get("num_comensales", 2))
+    num_comensales = comensales_equivalentes(cfg)  # incluye el ajuste infantil (#108)
     cfg_nut = config_nutricion(cfg)
     dias = cfg_nut.dias
     max_rep = _max_repeticiones_semana(cfg)
@@ -271,6 +302,10 @@ def generar_menu(
     from datetime import date
 
     mes_temporada = int(cfg.get("mes_temporada") or 0) or date.today().month
+    # Despensa (#97): ingredientes normalizados que el usuario ya tiene en casa.
+    despensa_norm = frozenset(
+        d.strip().lower() for d in (cfg.get("despensa") or []) if str(d).strip()
+    )
     # Formatos de producto (g/ml por paquete) para penalizar la sobra real (#23/24).
     productos_formato: dict[str, float] = {}
     if peso_sobra > 0:
@@ -347,6 +382,8 @@ def generar_menu(
             procesado=c.procesado,
             estacionalidad=puntua_estacionalidad(c.ingredientes_norm, mes_temporada),
             calidad=c.calidad,
+            despensa=puntua_despensa(c.ingredientes_norm, despensa_norm),
+            festivo=puntua_temporada_festiva(quitar_acentos(c.titulo or ""), mes_temporada),
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -377,6 +414,8 @@ def generar_menu(
         peso_salud=peso_salud,
         peso_ultraprocesado=peso_interno(cfg, "evitar_procesados_pct"),
         peso_estacionalidad=peso_interno(cfg, "estacionalidad_pct"),
+        peso_despensa=peso_interno(cfg, "despensa_pct"),
+        peso_festivo=peso_interno(cfg, "festivo_pct"),
         peso_sobra=peso_sobra,
         productos_formato=productos_formato,
         max_familia_libre=int(cfg.get("max_comidas_por_familia", 2)),
@@ -388,7 +427,7 @@ def generar_menu(
         racion_frac_max=float(cfg.get("racion_frac_max", 1.25)),
         excluidas=excluidas,
         corte=corte,
-        presupuesto_max=float(cfg.get("presupuesto_max_semana", 0) or 0) or None,
+        presupuesto_max=presupuesto_max_efectivo(cfg, num_comensales),
         tiempo_max_solver=float(cfg.get("tiempo_max_solver", 0) or 0) or None,
         gap_solver=float(cfg.get("gap_solver", 0) or 0) or None,
     )

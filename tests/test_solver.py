@@ -228,6 +228,37 @@ def test_cena_prefiere_ligera_y_sencilla():
     assert menu.seleccion_cena.get("ligera", 0) >= menu.seleccion_cena.get("pesada", 0)
 
 
+def test_despensa_prefiere_recetas_que_usan_lo_que_ya_tienes():
+    de_despensa = RecetaOpt("con_despensa", "con_despensa", 1.0,
+                             {"energia_kcal": 500, "proteinas": 20.0}, despensa=1.0)
+    sin_despensa = RecetaOpt("sin_despensa", "sin_despensa", 1.0,
+                              {"energia_kcal": 500, "proteinas": 20.0}, despensa=0.0)
+    menu = optimizar_comida_cena(
+        [de_despensa, sin_despensa], _banda_energia(), dias=5, num_comensales=1,
+        max_repeticiones=10, frac_espanola_min=0, peso_despensa=5.0,
+    )
+    assert menu.factible
+    # A igual coste/nutrientes, se prefiere la que usa lo que ya tienes en casa (#97).
+    total_despensa = menu.seleccion_comida.get("con_despensa", 0) + menu.seleccion_cena.get("con_despensa", 0)
+    total_sin = menu.seleccion_comida.get("sin_despensa", 0) + menu.seleccion_cena.get("sin_despensa", 0)
+    assert total_despensa > total_sin
+
+
+def test_festivo_prefiere_recetas_del_tema_del_mes():
+    navideno = RecetaOpt("navideno", "navideno", 1.0,
+                          {"energia_kcal": 500, "proteinas": 20.0}, festivo=1.0)
+    normal = RecetaOpt("normal", "normal", 1.0,
+                        {"energia_kcal": 500, "proteinas": 20.0}, festivo=0.0)
+    menu = optimizar_comida_cena(
+        [navideno, normal], _banda_energia(), dias=5, num_comensales=1,
+        max_repeticiones=10, frac_espanola_min=0, peso_festivo=5.0,
+    )
+    assert menu.factible
+    total_navideno = menu.seleccion_comida.get("navideno", 0) + menu.seleccion_cena.get("navideno", 0)
+    total_normal = menu.seleccion_comida.get("normal", 0) + menu.seleccion_cena.get("normal", 0)
+    assert total_navideno > total_normal
+
+
 def test_variedad_penaliza_repetir_familia():
     # 3 recetas de la familia "salmorejo" (baratas) y una "guiso" (algo mas cara).
     salm = [

@@ -5,7 +5,15 @@ from __future__ import annotations
 import pytest
 
 from menu_app.almacenamiento.db import get_connection, init_db
-from menu_app.optimizacion.planes import cargar_plan, generar_plan, regenerar_semana
+from menu_app.optimizacion.planes import (
+    cargar_plan,
+    exportar_plan_json,
+    generar_plan,
+    importar_plan_json,
+    listar_planes,
+    regenerar_semana,
+    repetir_semana,
+)
 from menu_app.optimizacion.servicio import _max_repeticiones_semana, semanas_exclusion
 
 
@@ -58,6 +66,53 @@ def test_regenerar_semana_reescribe(conn, tmp_path):
     res = regenerar_semana(conn, cfg, plan_id, 1, excluir="cualquiera")
     _pid, semanas = cargar_plan(conn, plan_id)
     assert semanas[1]["factible"] == res.menu.factible
+
+
+def test_listar_planes_devuelve_los_mas_recientes_primero(conn, tmp_path):
+    p1, _ = generar_plan(conn, _cfg(tmp_path), n_semanas=1)
+    p2, _ = generar_plan(conn, _cfg(tmp_path), n_semanas=1)
+    planes = listar_planes(conn)
+    ids = [p["plan_id"] for p in planes]
+    assert ids.index(p2) < ids.index(p1)  # p2 se genero despues -> sale primero
+    resumen_p2 = next(p for p in planes if p["plan_id"] == p2)
+    assert resumen_p2["n_semanas"] == 1
+
+
+def test_repetir_semana_copia_los_datos_tal_cual(conn, tmp_path):
+    origen, _ = generar_plan(conn, _cfg(tmp_path), n_semanas=1)
+    ok = repetir_semana(conn, origen, 1, "plan-nuevo", 3)
+    assert ok
+    _pid, semanas = cargar_plan(conn, "plan-nuevo")
+    _pid_o, semanas_o = cargar_plan(conn, origen)
+    assert semanas[3]["seleccion_comida"] == semanas_o[1]["seleccion_comida"]
+
+
+def test_repetir_semana_sin_origen_devuelve_false(conn):
+    assert repetir_semana(conn, "no-existe", 1, "plan-nuevo", 1) is False
+
+
+def test_exportar_plan_inexistente_devuelve_none(conn):
+    assert exportar_plan_json(conn, "no-existe") is None
+
+
+def test_exportar_e_importar_plan_es_reversible(conn, tmp_path):
+    origen, _ = generar_plan(conn, _cfg(tmp_path), n_semanas=1)
+    _pid, semanas_origen = cargar_plan(conn, origen)
+
+    contenido = exportar_plan_json(conn, origen)
+    assert contenido is not None
+
+    nuevo_id = importar_plan_json(conn, contenido)
+    assert nuevo_id is not None
+    assert nuevo_id != origen
+
+    _pid2, semanas_nuevo = cargar_plan(conn, nuevo_id)
+    assert semanas_nuevo[1]["seleccion_comida"] == semanas_origen[1]["seleccion_comida"]
+
+
+def test_importar_json_invalido_devuelve_none(conn):
+    assert importar_plan_json(conn, b"esto no es json") is None
+    assert importar_plan_json(conn, b'{"sin_semanas": true}') is None
 
 
 def test_asignar_dias_separa_repeticiones():

@@ -27,13 +27,16 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from ..actualizaciones import hay_actualizacion, instalar
+from ..almacenamiento.alertas_precio import subidas_de_precio
 from ..almacenamiento.db import get_connection, init_db
+from ..almacenamiento.validacion_datos import validar_datos
 from ..backups import crear_backup, listar_backups, restaurar_backup
 from ..carrito import chromium_instalado, playwright_disponible
 from ..configuracion import DIAS_SEMANA, cargar_config, guardar_overlay, ruta_overlay
 from ..ingesta.categories import FOOD_CATEGORY_ROOTS
+from ..matching.descatalogados import productos_descatalogados, rematch_descatalogados
 from ..matching.repositorio import MatchingRepository
-from ..optimizacion.compra import lista_compra
+from ..optimizacion.compra import es_pasillo_perecedero, lista_compra
 from ..optimizacion.desayunos import sugerir_desayunos
 from ..optimizacion.economia_recetas import _FACTOR_PRECIO, _gramos_por_piezas
 from ..optimizacion.economia_recetas import invalidar_cache as invalidar_cache_recetas
@@ -43,7 +46,15 @@ from ..optimizacion.exportar import (
     menu_a_csv,
     menu_a_pdf,
 )
-from ..optimizacion.planes import cargar_plan, generar_plan, regenerar_semana
+from ..optimizacion.planes import (
+    cargar_plan,
+    exportar_plan_json,
+    generar_plan,
+    importar_plan_json,
+    listar_planes,
+    regenerar_semana,
+    repetir_semana,
+)
 from ..recetas.catalogo_ingredientes import ingredientes_catalogo
 from ..recetas.manual import (
     cargar_receta,
@@ -52,6 +63,7 @@ from ..recetas.manual import (
     listar_recetas,
     marcar_favorita,
 )
+from ..recetas.sustituciones import buscar_sustitutos
 from ..recetas.tags import generar_tags
 from ..recetas.utensilios import detectar_utensilios
 from ..telemetria import leer_ultimos_errores, limpiar_log, registrar_error
@@ -72,12 +84,14 @@ from .tareas import (
     _ACTUALIZACION,
     _CARRITO,
     _CATALOGO,
+    _CATALOGO_ANTIGUEDAD,
     _CHROMIUM,
     _banner_actualizacion,
     _comprobar_actualizacion,
     _lanzar_actualizacion,
     _lanzar_carrito,
     _lanzar_instalar_chromium,
+    comprobar_catalogo_desactualizado,
 )
 
 
@@ -118,6 +132,12 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             daemon=True,
         ).start()
 
+    # Catálogo programado (#116): comprueba su antigüedad al arrancar y, si el
+    # usuario activó el auto-refresco, lo lanza solo cuando lleva demasiado sin tocarse.
+    threading.Thread(
+        target=comprobar_catalogo_desactualizado, args=(_cfg_inicial,), daemon=True,
+    ).start()
+
     # ---------------------------------- menu ----------------------------------
 
     @app.get("/", response_class=HTMLResponse)
@@ -131,6 +151,15 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             conn.close()
         aviso = _banner_actualizacion()
         aviso += f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        # Catálogo programado (#116): avisa si lleva demasiado sin actualizarse.
+        _dias_cat = _CATALOGO_ANTIGUEDAD["dias"]
+        _umbral_cat = int(cfg.get("catalogo_dias_alerta", 7) or 7)
+        if n_productos and _dias_cat is not None and _dias_cat >= _umbral_cat and not _CATALOGO["activa"]:
+            aviso += (
+                f'<div class="card"><p class="warn">📅 El catálogo lleva <b>{_dias_cat} días</b> '
+                'sin actualizarse. <a href="/catalogo">Actualízalo</a> para tener precios y '
+                "ofertas al día.</p></div>"
+            )
         # Onboarding (#69): checklist de primeros pasos si aun no hay nada configurado.
         if n_productos == 0 or n_recetas == 0 or not semanas:
             pasos = [
@@ -455,6 +484,7 @@ function reescalarReceta() {{
         conn, cfg = _conn()
         try:
             compra = lista_compra(conn, despensa=cfg.get('despensa'))
+            subidas = subidas_de_precio(conn, rids=[linea.producto_id for linea in compra.lineas])
         finally:
             conn.close()
         if compra.semanas == 0:
@@ -465,9 +495,14 @@ function reescalarReceta() {{
         filas = ""
         for pasillo, lineas in compra.por_pasillo().items():
             subtotal = sum(linea.total for linea in lineas if linea.total is not None)
+            perecedero = (
+                ' <span class="chip" title="Cómpralo lo último para minimizar desperdicio (#105)">'
+                "🧊 perecedero</span>"
+                if es_pasillo_perecedero(pasillo) else ""
+            )
             filas += (
-                f'<tr><td colspan="5" style="padding-top:10px"><b>🛒 {html.escape(pasillo)}</b> '
-                f'<span class="meta">({subtotal:.2f} €)</span></td></tr>'
+                f'<tr><td colspan="5" style="padding-top:10px"><b>🛒 {html.escape(pasillo)}</b>'
+                f'{perecedero} <span class="meta">({subtotal:.2f} €)</span></td></tr>'
             )
             for linea in lineas:
                 enlace = (
@@ -511,6 +546,15 @@ function reescalarReceta() {{
             sin += (
                 f'<p class="warn">⊘ Agotados sin alternativa en su categoría (cómpralos a tu '
                 f"criterio o cambia de producto): {lista_ag}</p>"
+            )
+        if subidas:
+            lista_subidas = ", ".join(
+                f'{html.escape(a["nombre"])} ({a["precio_anterior"]:.2f}→{a["precio_actual"]:.2f} €, '
+                f'+{a["subida_pct"]:.0f}%)'
+                for a in subidas[:10]
+            )
+            sin += (
+                f'<p class="warn">📈 Subidas de precio recientes (#118): {lista_subidas}</p>'
             )
         ahorro_html = (
             f' <span class="chip">🏷️ ahorras {compra.ahorro_total:.2f} € en ofertas</span>'
@@ -622,6 +666,130 @@ function reescalarReceta() {{
             f"el formato del paquete.</p></div>"
         )
         return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None)
+
+    # --- Historial de planes y "repetir semana pasada" (#109) ---
+    @app.get("/historial", response_class=HTMLResponse)
+    def historial_page(msg: str = ""):
+        conn, _ = _conn()
+        try:
+            planes = listar_planes(conn)
+        finally:
+            conn.close()
+        aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        if not planes:
+            return _pagina("Historial de menús", aviso + '<div class="card">Todavía no hay planes generados.</div>')
+        filas = "".join(
+            f'<tr><td>{html.escape(p["creado"])}</td>'
+            f'<td>{p["n_semanas"]}</td><td>{p["coste_total"]:.2f} €</td>'
+            f'<td><a class="receta" href="/historial/{html.escape(p["plan_id"])}">Ver semanas</a></td></tr>'
+            for p in planes
+        )
+        importar = (
+            '<div class="card"><div class="franja">Compartir menús (#114)</div>'
+            '<form method="post" action="/historial/importar" enctype="multipart/form-data">'
+            '<label>Importar un plan (.json exportado desde "Ver semanas")</label>'
+            '<input type="file" name="fichero" accept="application/json" required>'
+            '<div style="margin-top:10px"><button class="btn" type="submit">Importar</button></div>'
+            "</form></div>"
+        )
+        cuerpo = aviso + (
+            '<div class="card"><div class="franja">Planes generados</div>'
+            "<table><tr><th>Fecha</th><th>Semanas</th><th>Coste total</th><th></th></tr>"
+            f"{filas}</table></div>"
+        ) + importar
+        return _pagina("Historial de menús", cuerpo)
+
+    @app.get("/historial/{plan_id}", response_class=HTMLResponse)
+    def historial_plan_page(plan_id: str, msg: str = ""):
+        conn, _ = _conn()
+        try:
+            _pid, semanas = cargar_plan(conn, plan_id)
+            plan_actual_id, _ = cargar_plan(conn)
+        finally:
+            conn.close()
+        if not semanas:
+            return _pagina("Historial de menús", '<div class="card">Ese plan no existe.</div>')
+        aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        es_actual = plan_id == plan_actual_id
+        filas = ""
+        for semana, datos in sorted(semanas.items()):
+            repetir = "" if es_actual else (
+                f'<form method="post" action="/repetir-semana" style="display:inline">'
+                f'<input type="hidden" name="origen_plan_id" value="{html.escape(plan_id)}">'
+                f'<input type="hidden" name="origen_semana" value="{semana}">'
+                f'<button class="btn mini" type="submit">Repetir esta semana</button></form>'
+            )
+            tabla = _tabla_dias(datos) if datos.get("factible") else '<p class="meta">Sin menú factible.</p>'
+            filas += (
+                f'<div class="card"><div class="franja">Semana {semana} '
+                f'<span style="float:right">{repetir}</span></div>{tabla}'
+                f'<p class="meta">Coste: {datos.get("coste_total", 0):.2f} €</p></div>'
+            )
+        nota = (
+            '<p class="note">Este es el plan actual.</p>' if es_actual else
+            '<p class="note">Plan anterior (solo lectura). "Repetir esta semana" la añade '
+            "como una semana nueva al final del plan actual.</p>"
+        )
+        exportar = (
+            f'<p><a class="receta" href="/historial/{html.escape(plan_id)}/exportar.json">'
+            "⬇️ Exportar este plan (.json, para compartirlo)</a></p>"
+        )
+        return _pagina(f"Plan {plan_id}", aviso + nota + exportar + filas)
+
+    @app.get("/historial/{plan_id}/exportar.json")
+    def historial_exportar(plan_id: str):
+        conn, _ = _conn()
+        try:
+            data = exportar_plan_json(conn, plan_id)
+        finally:
+            conn.close()
+        if data is None:
+            return RedirectResponse(
+                "/historial?msg=" + quote("Ese plan no existe."), status_code=303,
+            )
+        return Response(
+            data, media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename={plan_id}.json"},
+        )
+
+    @app.post("/historial/importar")
+    async def historial_importar(request: Request):
+        form = await request.form()
+        fichero = form.get("fichero")
+        contenido = await fichero.read() if fichero else b""
+        conn, _ = _conn()
+        try:
+            nuevo_id = importar_plan_json(conn, contenido)
+        finally:
+            conn.close()
+        if nuevo_id is None:
+            return RedirectResponse(
+                "/historial?msg=" + quote("El fichero no es un plan exportado válido."),
+                status_code=303,
+            )
+        return RedirectResponse(
+            f"/historial/{quote(nuevo_id)}?msg=" + quote("Plan importado."), status_code=303,
+        )
+
+    @app.post("/repetir-semana")
+    def repetir_semana_ruta(origen_plan_id: str = Form(...), origen_semana: int = Form(...)):
+        conn, _ = _conn()
+        try:
+            destino_plan_id, semanas_actual = cargar_plan(conn)
+            if destino_plan_id is None:
+                return RedirectResponse(
+                    "/historial?msg=" + quote("No hay un plan actual al que añadir la semana."),
+                    status_code=303,
+                )
+            destino_semana = max(semanas_actual) + 1 if semanas_actual else 1
+            ok = repetir_semana(conn, origen_plan_id, origen_semana, destino_plan_id, destino_semana)
+        finally:
+            conn.close()
+        if not ok:
+            return RedirectResponse(
+                "/historial?msg=" + quote("No se encontró esa semana."), status_code=303,
+            )
+        return RedirectResponse(f"/?semana={destino_semana}", status_code=303)
 
     # --- Dashboard (#65): gasto historico y top recetas, SVG inline (sin CDN) ---
     @app.get("/dashboard", response_class=HTMLResponse)
@@ -742,6 +910,36 @@ function reescalarReceta() {{
         )
         return _pagina(f"Buscar «{q}»", cuerpo)
 
+    # --- Asistente de sustituciones de cocina (#100) ---
+    @app.get("/sustituciones", response_class=HTMLResponse)
+    def sustituciones_page(q: str = ""):
+        q = q.strip()
+        form = (
+            '<div class="card"><form method="get" action="/sustituciones">'
+            f'<input name="q" value="{html.escape(q)}" autofocus placeholder='
+            '"¿Qué ingrediente te falta? (p.ej. nata, huevo, mantequilla)" '
+            'style="width:100%;max-width:420px">'
+            ' <button class="btn" type="submit">Buscar</button></form>'
+            '<p class="note">Sustituciones de cocina habituales, no productos del catálogo: '
+            "para eso ya está el matching de recetas.</p></div>"
+        )
+        if not q:
+            return _pagina("Sustituciones", form)
+        resultado = buscar_sustitutos(q)
+        if not resultado:
+            cuerpo = form + (
+                f'<div class="card"><p class="meta">No tengo sustituciones para «{html.escape(q)}» '
+                "todavía.</p></div>"
+            )
+            return _pagina(f"Sustituciones para «{q}»", cuerpo)
+        clave, alternativas = resultado
+        filas = "".join(f"<li>{html.escape(a)}</li>" for a in alternativas)
+        cuerpo = form + (
+            f'<div class="card"><div class="franja">En vez de «{html.escape(clave)}», prueba:</div>'
+            f"<ul>{filas}</ul></div>"
+        )
+        return _pagina(f"Sustituciones para «{q}»", cuerpo)
+
     # --- Cola de correcciones de matching (#13/#14): asignar producto a mano ---
     @app.get("/matching", response_class=HTMLResponse)
     def matching_page(ing: str = "", q: str = "", msg: str = ""):
@@ -756,6 +954,17 @@ function reescalarReceta() {{
                 f"sin producto: <b>{total - con}</b>. Asigna a mano los que falten para que "
                 "el menú pueda usar esas recetas.</p></div>"
             )
+            n_descatalogados = len(productos_descatalogados(conn))
+            if n_descatalogados:
+                cab += (
+                    '<div class="card"><div class="franja">Posibles descatalogados (#117)</div>'
+                    f'<p class="meta"><b>{n_descatalogados}</b> ingrediente(s) emparejados con un '
+                    "producto que no apareció en la última actualización del catálogo (puede que "
+                    "Alcampo lo haya dejado de vender).</p>"
+                    '<form method="post" action="/matching/rematch-descatalogados">'
+                    '<button class="btn sec" type="submit">Buscar sustituto automáticamente</button>'
+                    "</form></div>"
+                )
             if ing:
                 # Buscar productos candidatos para el ingrediente `ing`.
                 like = f"%{q.strip().lower()}%" if q.strip() else f"%{ing.split()[0]}%"
@@ -894,6 +1103,20 @@ function reescalarReceta() {{
             conn.close()
         return RedirectResponse("/matching?msg=Sinónimo borrado.", status_code=303)
 
+    @app.post("/matching/rematch-descatalogados")
+    def matching_rematch_descatalogados():
+        conn, _ = _conn()
+        try:
+            resumen = rematch_descatalogados(conn)
+        finally:
+            conn.close()
+        msg = (
+            f"Revisados {resumen['revisados']}, re-emparejados {resumen['reemparejados']}."
+            if resumen["revisados"]
+            else "No hay ningún ingrediente descatalogado que revisar."
+        )
+        return RedirectResponse(f"/matching?msg={quote(msg)}", status_code=303)
+
     @app.post("/carrito/enviar")
     async def carrito_enviar(request: Request):
         form = await request.form()
@@ -1019,7 +1242,9 @@ function reescalarReceta() {{
             )
             + estado
             + '<p class="meta">Refresca precios, ofertas y productos nuevos de las categorías '
-            "marcadas. Va a ritmo lento para no saturar la web; puedes seguir usando la app.</p></div>"
+            "marcadas. Va a ritmo lento para no saturar la web; puedes seguir usando la app.</p>"
+            '<p><a class="receta" href="/catalogo/validar">🔍 Revisar datos anómalos (#120)</a></p>'
+            "</div>"
         )
 
         # Visor/editor del catalogo.
@@ -1056,6 +1281,31 @@ function reescalarReceta() {{
         return _pagina(
             "Catálogo", aviso + actualizar_card + visor, refrescar=4 if activa else None
         )
+
+    @app.get("/catalogo/validar", response_class=HTMLResponse)
+    def catalogo_validar_page():
+        conn, _ = _conn()
+        try:
+            problemas = validar_datos(conn)
+        finally:
+            conn.close()
+        if not problemas:
+            return _pagina(
+                "Revisión de datos",
+                '<div class="card ok">No se ha encontrado ningún dato anómalo. ✓</div>',
+            )
+        filas = "".join(
+            f'<tr><td><a class="receta" href="/catalogo/{html.escape(p["retailer_product_id"])}">'
+            f'{html.escape(p["nombre"])}</a></td><td>{html.escape(p["problema"])}</td></tr>'
+            for p in problemas
+        )
+        cuerpo = (
+            f'<div class="card"><div class="franja">{len(problemas)} productos para revisar</div>'
+            '<p class="meta">Precios/nutrientes físicamente imposibles o inconsistentes (#120). '
+            "No se corrige nada automáticamente: revisa y edita cada producto si hace falta.</p>"
+            f"<table><tr><th>Producto</th><th>Problema</th></tr>{filas}</table></div>"
+        )
+        return _pagina("Revisión de datos", cuerpo)
 
     @app.get("/catalogo/{producto_id}", response_class=HTMLResponse)
     def producto_editar(producto_id: str, msg: str = ""):
@@ -1295,6 +1545,12 @@ function reescalarReceta() {{
             '<div class="row">'
             + _num("num_comensales", "Comensales", int(cfg.get("num_comensales", 2)),
                    "Cuántas personas comen de cada receta.", "1", "1")
+            + _num("ninos", "…de los cuales, niños (#108)", int(cfg.get("ninos", 0) or 0),
+                   "Comen una fracción de ración de adulto (ver abajo). 0 = todos adultos.",
+                   "1", "0")
+            + _num("factor_racion_infantil", "Ración infantil (%)",
+                   round(float(cfg.get("factor_racion_infantil", 0.6)) * 100),
+                   "Qué fracción de una ración de adulto come un niño.", "5", "0")
             + _num("kcal_por_comensal", "kcal por persona y día",
                    int(cfg.get("kcal_por_comensal", 2000)),
                    "Energía diaria objetivo. El menú cubre la parte de comida y cena.", "50", "1000")
@@ -1318,6 +1574,11 @@ function reescalarReceta() {{
                    round(float(cfg.get("presupuesto_max_semana", 0) or 0)),
                    "Tope de gasto semanal. 0 = sin tope. Si es muy bajo puede no haber "
                    "menú posible sin saltarse los nutrientes.", "5", "0")
+            + _num("presupuesto_max_por_comensal_semana", "…o por comensal (€) (#113)",
+                   round(float(cfg.get("presupuesto_max_por_comensal_semana", 0) or 0)),
+                   "Si es >0, manda sobre el de arriba y se multiplica por el nº de "
+                   "comensales (el tope se ajusta solo si cambia el tamaño del hogar). "
+                   "0 = usar el presupuesto por semana.", "1", "0")
             + (
                 '<div style="flex:2 1 320px"><label>Ingredientes que NO quieres</label>'
                 '<input name="ingredientes_excluidos" '
@@ -1340,6 +1601,15 @@ function reescalarReceta() {{
                 'placeholder="horno, olla exprés, freidora">'
                 '<p class="note">Excluye recetas que los requieran (detectado por título/'
                 "instrucciones).</p></div>"
+            )
+            + (
+                '<div style="flex:2 1 320px"><label>Despensa (lo que ya tienes en casa)</label>'
+                '<input name="despensa" '
+                f'value="{html.escape(", ".join(cfg.get("despensa", []) or []))}" '
+                'placeholder="sal, aceite de oliva, especias">'
+                '<p class="note">Separa por comas. No aparece en la lista de la compra, y si '
+                '"Cocinar con la despensa" está por encima de 0 %, se priorizan recetas que lo '
+                "usen (#97).</p></div>"
             )
             + "</div><div class='row'>"
             + _slider("sabor_pct", "Peso del sabor", _pct(cfg, "sabor_pct"),
@@ -1372,6 +1642,14 @@ function reescalarReceta() {{
                       _pct(cfg, "estacionalidad_pct"),
                       "Premia recetas con frutas y verduras de temporada este mes (más baratas "
                       "y sabrosas). 0 % = desactivado.")
+            + _slider("despensa_pct", "Cocinar con la despensa",
+                      _pct(cfg, "despensa_pct"),
+                      "Premia recetas que usan ingredientes de tu despensa (los que ya tienes "
+                      "en casa, ver más abajo). 0 % = desactivado.")
+            + _slider("festivo_pct", "Temporada festiva",
+                      _pct(cfg, "festivo_pct"),
+                      "Premia recetas cuyo título encaja con la época del año (Navidad en "
+                      "diciembre; barbacoa/platos fríos en verano). 0 % = desactivado.")
             + "</div><div class='row'>"
             + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
                    int(cfg.get("tiempo_max_receta_min", 0) or 0),
@@ -1481,6 +1759,29 @@ function reescalarReceta() {{
             "configuración). Se conservan las últimas 10; restaurar guarda antes el estado "
             "actual, por si acaso.</p></div>"
         )
+        # --- Catálogo programado (#116) ---
+        auto_cat = bool(cfg.get("catalogo_auto_actualizar", False))
+        dias_alerta = int(cfg.get("catalogo_dias_alerta", 7) or 7)
+        dias_actual = _CATALOGO_ANTIGUEDAD["dias"]
+        estado_cat = (
+            f'<p class="meta">Catálogo actualizado hace <b>{dias_actual} día(s)</b>.</p>'
+            if dias_actual is not None else '<p class="meta">Aún sin comprobar.</p>'
+        )
+        cuerpo += (
+            '<div class="card"><div class="franja">Catálogo programado</div>'
+            + estado_cat
+            + '<form method="post" action="/config/catalogo-programado">'
+            f'<label>Avisar si lleva más de <input name="catalogo_dias_alerta" type="number" '
+            f'min="1" value="{dias_alerta}" style="width:70px;display:inline-block"> días sin '
+            "actualizarse</label>"
+            '<label style="margin-top:8px"><input type="checkbox" name="catalogo_auto_actualizar" '
+            f'value="1" style="width:auto" {"checked" if auto_cat else ""}> Actualizarlo solo, en '
+            "2º plano, al superar ese umbral</label>"
+            '<div style="margin-top:10px"><button class="btn sec" type="submit">Guardar</button></div>'
+            "</form>"
+            '<p class="note">El auto-refresco tarda y usa la web de Alcampo; por eso está '
+            "desactivado por defecto. Sin él, solo verás un aviso en el menú.</p></div>"
+        )
         # --- Diagnostico de errores LOCAL, opt-in (#81) ---
         telemetria_on = bool(cfg.get("telemetria_local", False))
         errores = leer_ultimos_errores() if telemetria_on else ""
@@ -1517,6 +1818,15 @@ function reescalarReceta() {{
             return RedirectResponse("/config?msg=Perfil: valores no válidos.", status_code=303)
         guardar_overlay(config_path, {"perfil": perfil})
         return RedirectResponse("/config?msg=Perfil guardado.", status_code=303)
+
+    @app.post("/config/catalogo-programado")
+    async def config_catalogo_programado(request: Request):
+        form = await request.form()
+        guardar_overlay(config_path, {
+            "catalogo_dias_alerta": max(1, int(form.get("catalogo_dias_alerta", 7) or 7)),
+            "catalogo_auto_actualizar": form.get("catalogo_auto_actualizar") == "1",
+        })
+        return RedirectResponse("/config?msg=Preferencia guardada.", status_code=303)
 
     @app.post("/config/telemetria")
     async def config_telemetria(request: Request):
@@ -1587,6 +1897,8 @@ function reescalarReceta() {{
         try:
             cambios = {
                 "num_comensales": int(form.get("num_comensales", 2)),
+                "ninos": int(form.get("ninos", 0) or 0),
+                "factor_racion_infantil": max(0.1, float(form.get("factor_racion_infantil", 60)) / 100),
                 "kcal_por_comensal": float(form.get("kcal_por_comensal", 2000)),
                 "semanas_plan": int(form.get("semanas_plan", 1)),
                 "dias_repeticion": int(form.get("dias_repeticion", 7)),
@@ -1602,8 +1914,13 @@ function reescalarReceta() {{
                 "sobra_pct": float(form.get("sobra_pct", 0)),
                 "evitar_procesados_pct": float(form.get("evitar_procesados_pct", 0)),
                 "estacionalidad_pct": float(form.get("estacionalidad_pct", 0)),
+                "despensa_pct": float(form.get("despensa_pct", 0)),
+                "festivo_pct": float(form.get("festivo_pct", 0)),
                 "tiempo_max_receta_min": int(form.get("tiempo_max_receta_min", 0) or 0),
                 "presupuesto_max_semana": float(form.get("presupuesto_max_semana", 0) or 0),
+                "presupuesto_max_por_comensal_semana": float(
+                    form.get("presupuesto_max_por_comensal_semana", 0) or 0
+                ),
                 "ingredientes_excluidos": [
                     t.strip() for t in str(form.get("ingredientes_excluidos", "")).split(",")
                     if t.strip()
@@ -1614,6 +1931,9 @@ function reescalarReceta() {{
                 "utensilios_excluidos": [
                     t.strip() for t in str(form.get("utensilios_excluidos", "")).split(",")
                     if t.strip()
+                ],
+                "despensa": [
+                    t.strip() for t in str(form.get("despensa", "")).split(",") if t.strip()
                 ],
                 "batchcooking": {"dias": [str(d) for d in form.getlist("dias_bc")]},
             }
