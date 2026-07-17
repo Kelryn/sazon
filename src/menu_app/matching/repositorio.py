@@ -67,6 +67,25 @@ class MatchingRepository:
             "SELECT COUNT(*) AS n FROM mapeo_ingr_producto WHERE retailer_product_id IS NOT NULL"
         ).fetchone()["n"]
 
+    def sinonimos(self) -> dict[str, str]:
+        """Sinonimos del usuario {palabra: reemplazo} (#22/#14)."""
+        return {
+            r["palabra"]: r["reemplazo"]
+            for r in self.conn.execute("SELECT palabra, reemplazo FROM sinonimos_usuario")
+        }
+
+    def anadir_sinonimo(self, palabra: str, reemplazo: str, fecha: str) -> None:
+        self.conn.execute(
+            "INSERT INTO sinonimos_usuario (palabra, reemplazo, fecha) VALUES (?, ?, ?) "
+            "ON CONFLICT(palabra) DO UPDATE SET reemplazo=excluded.reemplazo, fecha=excluded.fecha",
+            (palabra.strip().lower(), reemplazo.strip().lower(), fecha),
+        )
+        self.conn.commit()
+
+    def borrar_sinonimo(self, palabra: str) -> None:
+        self.conn.execute("DELETE FROM sinonimos_usuario WHERE palabra = ?", (palabra.strip().lower(),))
+        self.conn.commit()
+
     def sin_match(self, limite: int = 200) -> list[str]:
         """Ingredientes normalizados SIN producto casado (cola de correcciones, #13)."""
         cur = self.conn.execute(

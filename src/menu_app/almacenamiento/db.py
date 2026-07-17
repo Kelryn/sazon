@@ -182,6 +182,14 @@ CREATE TABLE IF NOT EXISTS mapeo_ingr_producto (
     -- no debe bloquear si el catalogo se reextrae.
 );
 
+-- Sinonimos del usuario (#22/#14): palabra -> reemplazo, aplicado al normalizar el
+-- ingrediente antes de casar. Permite corregir el matching de forma reutilizable.
+CREATE TABLE IF NOT EXISTS sinonimos_usuario (
+    palabra   TEXT PRIMARY KEY,
+    reemplazo TEXT NOT NULL,
+    fecha     TEXT NOT NULL
+);
+
 -- Indices para acelerar joins/filtros del optimizador y la lista de la compra (#83).
 -- (Los que dependen de columnas evolutivas —rol, es_batchcooking— se crean en init_db
 -- DESPUES de _migrar_columnas, ver _INDICES_POST_MIGRACION.)

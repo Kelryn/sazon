@@ -904,7 +904,27 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 f'href="/matching?ing={html.escape(i)}">Buscar producto…</a></td></tr>'
                 for i in faltan
             ) or '<tr><td colspan="2">🎉 No hay ingredientes sin emparejar.</td></tr>'
-            cuerpo = aviso + cab + f'<div class="card"><table>{filas}</table></div>'
+            # Editor de sinonimos (#22/#14).
+            sins = repo.sinonimos()
+            filas_sin = "".join(
+                f'<tr><td>{html.escape(p)} → {html.escape(r)}</td>'
+                f'<td style="text-align:right"><form method="post" action="/matching/sinonimo/borrar">'
+                f'<input type="hidden" name="palabra" value="{html.escape(p)}">'
+                f'<button class="btn mini sec" type="submit">Borrar</button></form></td></tr>'
+                for p, r in sorted(sins.items())
+            ) or '<tr><td colspan="2">Sin sinónimos definidos.</td></tr>'
+            editor = (
+                '<div class="card"><div class="franja">Sinónimos (aprender correcciones)</div>'
+                '<p class="note">Enseña al matcher que una palabra equivale a otra (p. ej. '
+                '«ajoporro → puerro»). Se aplican al volver a emparejar (Catálogo → actualizar, '
+                'o el comando de emparejado).</p>'
+                '<form method="post" action="/matching/sinonimo" class="row">'
+                '<div><label>Palabra</label><input name="palabra" placeholder="ajoporro"></div>'
+                '<div><label>Equivale a</label><input name="reemplazo" placeholder="puerro"></div>'
+                '<div style="align-self:end"><button class="btn" type="submit">Añadir</button></div>'
+                f'</form><table>{filas_sin}</table></div>'
+            )
+            cuerpo = aviso + cab + f'<div class="card"><table>{filas}</table></div>' + editor
             return _pagina("Correcciones", cuerpo)
         finally:
             conn.close()
@@ -923,6 +943,32 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         invalidar_cache_recetas()  # el mapeo cambio -> recalcular coste/nutricion
         msg = f"«{ing}» asignado." if ok else "No se pudo asignar (producto no encontrado)."
         return RedirectResponse(f"/matching?msg={quote(msg)}", status_code=303)
+
+    @app.post("/matching/sinonimo")
+    async def matching_sinonimo(palabra: str = Form(""), reemplazo: str = Form("")):
+        from datetime import datetime, timezone
+
+        conn, _ = _conn()
+        try:
+            if palabra.strip() and reemplazo.strip():
+                MatchingRepository(conn).anadir_sinonimo(
+                    palabra, reemplazo, datetime.now(timezone.utc).isoformat(timespec="seconds")
+                )
+                msg = f"Sinónimo «{palabra.strip()} → {reemplazo.strip()}» guardado."
+            else:
+                msg = "Indica palabra y equivalencia."
+        finally:
+            conn.close()
+        return RedirectResponse(f"/matching?msg={quote(msg)}", status_code=303)
+
+    @app.post("/matching/sinonimo/borrar")
+    async def matching_sinonimo_borrar(palabra: str = Form("")):
+        conn, _ = _conn()
+        try:
+            MatchingRepository(conn).borrar_sinonimo(palabra)
+        finally:
+            conn.close()
+        return RedirectResponse("/matching?msg=Sinónimo borrado.", status_code=303)
 
     @app.post("/carrito/enviar")
     def carrito_enviar():

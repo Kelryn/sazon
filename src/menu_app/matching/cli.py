@@ -91,11 +91,17 @@ def main(
     )
 
     matcher = MatcherLexico(indice, umbral=umbral)
+    sinonimos = repo.sinonimos()  # sinonimos del usuario (#22/#14)
+    if sinonimos:
+        click.echo(f"Sinonimos del usuario aplicados: {len(sinonimos)}")
     fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
     con_match = 0
 
+    def _aplicar_sinonimos(clave: str) -> str:
+        return " ".join(sinonimos.get(t, t) for t in clave.split())
+
     for i, ing in enumerate(ingredientes, start=1):
-        clave = clave_ingrediente(ing)
+        clave = _aplicar_sinonimos(clave_ingrediente(ing))
         if desambiguador is not None:
             match = _emparejar_con_llm(matcher, desambiguador, clave, k_candidatos)
             time.sleep(intervalo_llm)  # respeta el limite de la capa gratuita
