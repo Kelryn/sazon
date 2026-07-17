@@ -172,6 +172,11 @@ almacenamiento:
 # Solo se puede desactivar la comprobacion automatica al arrancar.
 actualizaciones:
   comprobar_al_arrancar: true
+  canal: estable          # estable | beta (#77): beta incluye pre-releases de GitHub
+
+backups_automaticos: true  # copia de seguridad de BD+config al arrancar (#80)
+telemetria_local: false    # diagnostico de errores 100% LOCAL, opt-in (#81); no
+                          # envia nada por red (Sazon no tiene servidor propio)
 
 off:
   # Cruce con Open Food Facts (por nombre+marca, ya que Alcampo no da EAN):

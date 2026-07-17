@@ -12,6 +12,8 @@ from .alcampo import (
     ResultadoCarrito,
     ResultadoLinea,
     anadir_al_carrito,
+    chromium_instalado,
+    instalar_chromium,
     playwright_disponible,
 )
 
@@ -19,5 +21,7 @@ __all__ = [
     "ResultadoCarrito",
     "ResultadoLinea",
     "anadir_al_carrito",
+    "chromium_instalado",
+    "instalar_chromium",
     "playwright_disponible",
 ]

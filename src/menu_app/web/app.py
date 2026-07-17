@@ -26,13 +26,25 @@ from urllib.parse import quote
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from ..actualizaciones import hay_actualizacion, instalar
-from ..carrito import anadir_al_carrito, playwright_disponible
+from ..actualizaciones import (
+    _es_ejecutable_congelado,
+    hay_actualizacion,
+    instalar,
+    pre_descargar,
+)
+from ..backups import crear_backup, listar_backups, restaurar_backup
+from ..telemetria import leer_ultimos_errores, limpiar_log, registrar_error
+from ..carrito import (
+    anadir_al_carrito,
+    chromium_instalado,
+    instalar_chromium,
+    playwright_disponible,
+)
 from ..almacenamiento.actualizar import actualizar_catalogo
 from ..almacenamiento.db import get_connection, init_db
 from ..version import __version__
 from ..ingesta.categories import FOOD_CATEGORY_ROOTS
-from ..configuracion import DIAS_SEMANA, cargar_config, guardar_overlay
+from ..configuracion import DIAS_SEMANA, cargar_config, guardar_overlay, ruta_overlay
 from ..optimizacion.compra import lista_compra
 from ..optimizacion.desayunos import sugerir_desayunos
 from ..optimizacion.exportar import (
@@ -179,30 +191,77 @@ _CATALOGO = {"activa": False, "log": deque(maxlen=300), "resumen": ""}
 
 # Estado del envio de la compra al carrito de Alcampo (en 2º plano).
 _CARRITO = {"activa": False, "log": deque(maxlen=400), "resumen": ""}
+# Instalacion bajo demanda de Chromium (#78): navegador de respaldo si no hay Chrome/Edge.
+_CHROMIUM = {"instalando": False, "log": deque(maxlen=200), "resumen": ""}
+
+
+def _lanzar_instalar_chromium() -> bool:
+    if _CHROMIUM["instalando"]:
+        return False
+    _CHROMIUM["instalando"] = True
+    _CHROMIUM["log"].clear()
+    _CHROMIUM["resumen"] = ""
+
+    def _correr():
+        try:
+            ok, msg = instalar_chromium(log=_CHROMIUM["log"].append)
+            _CHROMIUM["resumen"] = msg
+        except Exception as e:  # noqa: BLE001
+            _CHROMIUM["resumen"] = f"Error: {e}"
+        finally:
+            _CHROMIUM["instalando"] = False
+
+    threading.Thread(target=_correr, daemon=True).start()
+    return True
 
 # Estado de la comprobacion de actualizaciones (Fase 11): None = sin comprobar,
 # False = comprobado y al dia, InfoActualizacion = hay version nueva.
-_ACTUALIZACION = {"estado": None, "comprobado": False}
+# "descarga": ruta ya predescargada en 2º plano (#75), o None si aun no.
+_ACTUALIZACION = {"estado": None, "comprobado": False, "descarga": None, "descargando": False}
 
 
-def _comprobar_actualizacion() -> None:
-    """Consulta GitHub (una vez, repo fijo) y guarda el resultado en cache."""
-    _ACTUALIZACION["estado"] = hay_actualizacion()
+def _comprobar_actualizacion(canal: str = "estable") -> None:
+    """Consulta GitHub (una vez, repo fijo) y guarda el resultado en cache. Si hay
+    version nueva, lanza la PRE-DESCARGA en 2º plano (#75): asi "Instalar" es
+    instantaneo despues (no espera a bajar el fichero)."""
+    info = hay_actualizacion(canal=canal)
+    _ACTUALIZACION["estado"] = info
     _ACTUALIZACION["comprobado"] = True
+    if info and info.es_instalador and _es_ejecutable_congelado():
+        def _predescargar():
+            _ACTUALIZACION["descargando"] = True
+            try:
+                _ACTUALIZACION["descarga"] = pre_descargar(info)
+            except Exception:  # noqa: BLE001 - se reintenta al pulsar "Instalar"
+                pass
+            finally:
+                _ACTUALIZACION["descargando"] = False
+        threading.Thread(target=_predescargar, daemon=True).start()
 
 
 def _banner_actualizacion() -> str:
-    """Banner (en todas las paginas) si hay una version nueva disponible."""
+    """Banner (en todas las paginas) si hay una version nueva disponible, con el
+    changelog de la release visible (#76) y el estado de la pre-descarga (#75)."""
     info = _ACTUALIZACION["estado"]
     if not info:
         return ""
+    estado_descarga = (
+        " (descargando en 2º plano…)" if _ACTUALIZACION["descargando"]
+        else " (lista para instalar)" if _ACTUALIZACION["descarga"] else ""
+    )
+    changelog = (
+        f'<details style="margin-top:6px"><summary class="meta">Ver novedades</summary>'
+        f'<pre class="log" style="white-space:pre-wrap">{html.escape(info.notas[:2000])}</pre></details>'
+        if info.notas else ""
+    )
+    beta = ' <span class="chip">beta</span>' if info.es_beta else ""
     return (
         f'<div class="card" style="border-left:4px solid var(--dorado)">'
-        f'✨ <b>Nueva versión disponible: {html.escape(info.version)}</b> '
-        f'(tienes la {__version__}). '
+        f'✨ <b>Nueva versión disponible: {html.escape(info.version)}</b>{beta} '
+        f'(tienes la {__version__}){estado_descarga}. '
         f'<form method="post" action="/actualizaciones/comprobar" style="display:inline">'
-        f'<button class="btn mini" type="submit">Instalar</button></form> '
-        f'<a class="meta" href="{html.escape(info.url_pagina)}" target="_blank">ver novedades</a></div>'
+        f'<button class="btn mini" type="submit">Instalar</button></form>'
+        f"{changelog}</div>"
     )
 
 
@@ -579,6 +638,14 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
     config_path = Path(config_path)
     app = FastAPI(title=NOMBRE)
 
+    # Diagnostico de errores LOCAL, opt-in (#81): NO se envia nada por red (no hay
+    # servidor propio); solo se anota en un log local si el usuario lo activa.
+    @app.exception_handler(Exception)
+    async def _capturar_error(request: Request, exc: Exception):
+        activo = bool(cargar_config(config_path).get("telemetria_local", False))
+        registrar_error(request.url.path, exc, activo)
+        raise exc  # deja que FastAPI/uvicorn lo trate igual que sin este handler
+
     def _conn():
         cfg = cargar_config(config_path)
         ruta = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
@@ -588,8 +655,21 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
 
     # Comprobacion de actualizaciones al arrancar (en segundo plano, no bloquea).
     _cfg_inicial = cargar_config(config_path)
-    if (_cfg_inicial.get("actualizaciones", {}) or {}).get("comprobar_al_arrancar", True):
-        threading.Thread(target=_comprobar_actualizacion, daemon=True).start()
+    _cfg_upd = _cfg_inicial.get("actualizaciones", {}) or {}
+    if _cfg_upd.get("comprobar_al_arrancar", True):
+        threading.Thread(
+            target=_comprobar_actualizacion,
+            args=(str(_cfg_upd.get("canal", "estable")),),
+            daemon=True,
+        ).start()
+
+    # Copia de seguridad automatica al arrancar (#80): BD + config.usuario.yaml.
+    if _cfg_inicial.get("backups_automaticos", True):
+        _db_inicial = Path((_cfg_inicial.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+        threading.Thread(
+            target=lambda: crear_backup(_db_inicial, ruta_overlay(config_path)),
+            daemon=True,
+        ).start()
 
     # ---------------------------------- menu ----------------------------------
 
@@ -1056,9 +1136,36 @@ function reescalarReceta() {{
             "paralelo. Al terminar te deja en la cesta para elegir franja y pagar. Salta los "
             "productos agotados.</p></div>"
         )
+        # Chromium bajo demanda (#78): solo se ofrece si Playwright esta pero el
+        # navegador de respaldo NO (el flujo normal usa tu Chrome/Edge; esto es solo
+        # una red de seguridad si Playwright no los encuentra).
+        chromium_card = ""
+        if playwright_disponible() and not chromium_instalado():
+            if _CHROMIUM["instalando"]:
+                cuerpo_chr = '<p class="ok">⏳ Instalando Chromium…</p>'
+            else:
+                cuerpo_chr = (
+                    '<form method="post" action="/carrito/instalar-navegador">'
+                    '<button class="btn sec" type="submit">Instalar navegador de respaldo (Chromium)</button>'
+                    "</form>"
+                )
+            if _CHROMIUM["resumen"]:
+                cuerpo_chr += f'<p class="ok">{html.escape(_CHROMIUM["resumen"])}</p>'
+            log_chr = "\n".join(list(_CHROMIUM["log"])[-20:])
+            if log_chr:
+                cuerpo_chr += f'<pre class="log">{html.escape(log_chr)}</pre>'
+            chromium_card = (
+                '<div class="card"><div class="franja">🧩 Navegador de respaldo</div>'
+                + cuerpo_chr
+                + '<p class="note">El carrito usa tu Chrome o Edge. Si no los encuentra, '
+                "puedes instalar aquí un Chromium propio (~150 MB) como respaldo — solo se "
+                "descarga si lo pides.</p></div>"
+            )
+
         aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
         cuerpo = (
             aviso
+            + chromium_card
             + descargas
             + carrito_card
             + f'<div class="card">{ticket}{sin}'
@@ -1345,6 +1452,12 @@ function reescalarReceta() {{
         sincronizar = form.get("sincronizar") == "1"
         vaciar_antes = form.get("vaciar_antes") == "1"
         _ok, msg = _lanzar_carrito(config_path, sincronizar=sincronizar, vaciar_antes=vaciar_antes)
+        return RedirectResponse(f"/compra?msg={quote(msg)}", status_code=303)
+
+    @app.post("/carrito/instalar-navegador")
+    def carrito_instalar_navegador():
+        ok = _lanzar_instalar_chromium()
+        msg = "Instalando Chromium en 2º plano…" if ok else "Ya hay una instalación en marcha."
         return RedirectResponse(f"/compra?msg={quote(msg)}", status_code=303)
 
     @app.get("/compra.csv")
@@ -1867,10 +1980,17 @@ function reescalarReceta() {{
         )
         # --- Actualizaciones (Fase 11): un solo boton, repo fijo, instala solo ---
         info = _ACTUALIZACION["estado"]
+        canal_actual = str((cfg.get("actualizaciones", {}) or {}).get("canal", "estable"))
         if info:
+            beta_chip = ' <span class="chip">beta</span>' if info.es_beta else ""
             estado_upd = (
-                f'<p class="ok">✨ Nueva versión <b>{html.escape(info.version)}</b> disponible.</p>'
+                f'<p class="ok">✨ Nueva versión <b>{html.escape(info.version)}</b>{beta_chip} disponible.</p>'
             )
+            if info.notas:  # changelog inline (#76)
+                estado_upd += (
+                    f'<details><summary class="meta">Ver novedades</summary>'
+                    f'<pre class="log" style="white-space:pre-wrap">{html.escape(info.notas[:2000])}</pre></details>'
+                )
         elif _ACTUALIZACION["comprobado"]:
             estado_upd = f'<p class="meta">Estás en la última versión (v{__version__}).</p>'
         else:
@@ -1878,11 +1998,55 @@ function reescalarReceta() {{
         cuerpo += (
             '<div class="card"><div class="franja">Actualizaciones de la aplicación</div>'
             f'<p class="meta">Versión instalada: <b>{__version__}</b></p>'
+            '<form method="post" action="/config/canal" style="margin-bottom:10px">'
+            '<label>Canal <select name="canal" onchange="this.form.submit()">'
+            f'<option value="estable"{" selected" if canal_actual != "beta" else ""}>Estable</option>'
+            f'<option value="beta"{" selected" if canal_actual == "beta" else ""}>Beta (#77)</option>'
+            "</select></label></form>"
             '<form method="post" action="/actualizaciones/comprobar">'
             '<button class="btn" type="submit">Buscar actualización</button></form>'
             f"{estado_upd}"
-            '<p class="note">Comprueba GitHub: si hay una versión nueva, la descarga e inicia el '
-            "instalador automáticamente; si ya estás al día, te lo indica.</p></div>"
+            '<p class="note">Comprueba GitHub: si hay una versión nueva, la descarga en 2º plano '
+            "y la deja lista; al pulsar Instalar, verifica su integridad (hash) y abre el "
+            "instalador. En el canal beta también se ofrecen versiones de prueba.</p></div>"
+        )
+        # --- Copias de seguridad (#80) ---
+        db_path = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+        backups = listar_backups(db_path)
+        filas_backup = "".join(
+            f'<tr><td>{html.escape(b.fecha)}</td><td>{b.tamano_kb:.0f} KB</td>'
+            f'<td style="text-align:right"><form method="post" action="/config/backups/restaurar" '
+            f'onsubmit="return confirm(\'¿Restaurar este backup? Se sobrescribirán los datos actuales '
+            f'(se guarda antes una copia de seguridad).\')">'
+            f'<input type="hidden" name="nombre" value="{html.escape(b.ruta.name)}">'
+            f'<button class="btn mini sec" type="submit">Restaurar</button></form></td></tr>'
+            for b in backups[:15]
+        ) or '<tr><td colspan="3" class="meta">Sin copias todavía.</td></tr>'
+        cuerpo += (
+            '<div class="card"><div class="franja">Copias de seguridad</div>'
+            '<form method="post" action="/config/backups/crear">'
+            '<button class="btn sec" type="submit">Crear copia ahora</button></form>'
+            f'<table><tr><th>Fecha</th><th>Tamaño</th><th></th></tr>{filas_backup}</table>'
+            '<p class="note">Se crea una copia automática al arrancar la app (BD + tu '
+            "configuración). Se conservan las últimas 10; restaurar guarda antes el estado "
+            "actual, por si acaso.</p></div>"
+        )
+        # --- Diagnostico de errores LOCAL, opt-in (#81) ---
+        telemetria_on = bool(cfg.get("telemetria_local", False))
+        errores = leer_ultimos_errores() if telemetria_on else ""
+        cuerpo += (
+            '<div class="card"><div class="franja">Diagnóstico de errores</div>'
+            '<form method="post" action="/config/telemetria">'
+            '<label style="display:inline-flex;align-items:center;gap:6px">'
+            f'<input type="checkbox" name="activo" value="1" style="width:auto" '
+            f'{"checked" if telemetria_on else ""} onchange="this.form.submit()"> '
+            "Guardar un registro local de errores</label></form>"
+            + (f'<pre class="log">{html.escape(errores) or "(sin errores registrados)"}</pre>'
+               + '<form method="post" action="/config/telemetria/limpiar" style="margin-top:6px">'
+               '<button class="btn mini sec" type="submit">Limpiar registro</button></form>'
+               if telemetria_on else "")
+            + '<p class="note">100% LOCAL: no se envía nada por red (Sazón no tiene servidor '
+            "propio). Solo queda en tu equipo, por si necesitas revisar un fallo.</p></div>"
         )
         return _pagina("Configuración", cuerpo)
 
@@ -1904,16 +2068,67 @@ function reescalarReceta() {{
         guardar_overlay(config_path, {"perfil": perfil})
         return RedirectResponse("/config?msg=Perfil guardado.", status_code=303)
 
+    @app.post("/config/telemetria")
+    async def config_telemetria(request: Request):
+        form = await request.form()
+        guardar_overlay(config_path, {"telemetria_local": form.get("activo") == "1"})
+        return RedirectResponse("/config?msg=Preferencia guardada.", status_code=303)
+
+    @app.post("/config/telemetria/limpiar")
+    def config_telemetria_limpiar():
+        limpiar_log()
+        return RedirectResponse("/config?msg=Registro limpiado.", status_code=303)
+
+    @app.post("/config/backups/crear")
+    def config_backups_crear():
+        cfg = cargar_config(config_path)
+        db_path = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+        ruta = crear_backup(db_path, ruta_overlay(config_path))
+        msg = f"Copia creada: {ruta.name}" if ruta else "No hay base de datos que respaldar."
+        return RedirectResponse(f"/config?msg={quote(msg)}", status_code=303)
+
+    @app.post("/config/backups/restaurar")
+    async def config_backups_restaurar(nombre: str = Form("")):
+        cfg = cargar_config(config_path)
+        db_path = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
+        backups = {b.ruta.name: b.ruta for b in listar_backups(db_path)}
+        ruta = backups.get(nombre)
+        if ruta is None:
+            return RedirectResponse(
+                f"/config?msg={quote('Backup no encontrado.')}", status_code=303
+            )
+        restaurar_backup(ruta, db_path, ruta_overlay(config_path))
+        return RedirectResponse(
+            f"/config?msg={quote(f'Restaurado desde {nombre}.')}", status_code=303
+        )
+
+    @app.post("/config/canal")
+    async def config_canal(request: Request):
+        form = await request.form()
+        canal = str(form.get("canal", "estable"))
+        if canal not in ("estable", "beta"):
+            canal = "estable"
+        guardar_overlay(config_path, {"actualizaciones": {"canal": canal}})
+        _ACTUALIZACION["comprobado"] = False
+        _ACTUALIZACION["estado"] = None
+        _ACTUALIZACION["descarga"] = None
+        return RedirectResponse("/config?msg=Canal actualizado.", status_code=303)
+
     @app.post("/actualizaciones/comprobar")
     def actualizaciones_comprobar():
-        """Comprueba GitHub y, si hay version nueva, la descarga e instala."""
-        info = hay_actualizacion()
+        """Comprueba GitHub y, si hay version nueva, la descarga (o usa la ya
+        predescargada en 2º plano, #75) y la instala."""
+        cfg = cargar_config(config_path)
+        canal = str((cfg.get("actualizaciones", {}) or {}).get("canal", "estable"))
+        info = hay_actualizacion(canal=canal)
+        if info is None or info != _ACTUALIZACION["estado"]:
+            _ACTUALIZACION["descarga"] = None  # version distinta: invalida la pre-descarga
         _ACTUALIZACION["estado"] = info
         _ACTUALIZACION["comprobado"] = True
         if info is None:
             msg = f"Ya tienes la última versión de Sazón (v{__version__})."
         else:
-            _ok, msg = instalar(info)
+            _ok, msg = instalar(info, ruta_predescargada=_ACTUALIZACION["descarga"])
         return RedirectResponse(f"/config?msg={quote(msg)}", status_code=303)
 
     @app.post("/config")

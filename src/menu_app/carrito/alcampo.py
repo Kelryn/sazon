@@ -120,6 +120,37 @@ def playwright_disponible() -> bool:
     return True
 
 
+def chromium_instalado() -> bool:
+    """True si el Chromium PROPIO de Playwright ya esta descargado (#78). No hace
+    falta si el usuario tiene Chrome/Edge (se prueban primero, ver _CANALES), pero
+    sirve de respaldo hermetico sin depender del sistema."""
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or str(Path.home())
+    carpeta = Path(base) / "ms-playwright"
+    return any(carpeta.glob("chromium-*")) if carpeta.exists() else False
+
+
+def instalar_chromium(log: Callable[[str], None] = print) -> tuple[bool, str]:
+    """Descarga el Chromium de Playwright BAJO DEMANDA (#78): solo cuando el usuario
+    quiere usar el carrito y no tiene Chrome/Edge disponibles para Playwright. No
+    requiere `uv`/codigo fuente: usa el propio interprete empaquetado."""
+    import subprocess
+
+    try:
+        proceso = subprocess.Popen(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        for linea in proceso.stdout or []:
+            log(linea.rstrip())
+        codigo = proceso.wait()
+    except Exception as e:  # noqa: BLE001
+        return False, f"No se pudo lanzar la instalación: {e}"
+    if codigo == 0 and chromium_instalado():
+        return True, "Chromium instalado correctamente."
+    return False, f"La instalación terminó con código {codigo}."
+
+
 # --- helpers puros (sin navegador) -------------------------------------------
 
 def _dir_navegador() -> Path:

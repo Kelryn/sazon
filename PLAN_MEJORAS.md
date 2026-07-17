@@ -87,8 +87,25 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
   (generar/cambiar/alternativa); scope grande, se aparca.
 
 ## Lote 8 — Distribución y robustez (v0.12.0)
-- ⬜ **74** Firmar .exe · **75** auto-descarga 2º plano · **76** changelog en la app · **77** canal beta.
-- ⬜ **78** Playwright bajo demanda · **80** backups · **81** telemetría opt-in · **82** hash del instalador.
+- ✅ **75** Auto-descarga en 2º plano (pre-descarga al detectar versión nueva; "Instalar"
+  es instantáneo). ✅ **76** Changelog en la app (notas de la release, inline, con
+  `<details>`). ✅ **77** Canal beta (selector estable/beta en Configuración; beta
+  consulta `/releases` e incluye pre-releases).
+- ✅ **78** Playwright bajo demanda (botón "Instalar navegador de respaldo" en
+  `/compra`; solo aparece si Playwright está pero Chromium no — el flujo normal usa
+  tu Chrome/Edge, esto es una red de seguridad). ✅ **80** Backups (automático al
+  arrancar + Configuración: crear/listar/restaurar, purga a 10, restaurar hace copia
+  de seguridad antes — **bug real detectado y corregido**: los nombres por segundo
+  colisionaban y se sobreescribían; ahora usan microsegundos). ✅ **81** Telemetría
+  **100% LOCAL, opt-in** (Sazón no tiene servidor propio: no se envía nada por red;
+  es un log local de errores que el usuario activa si quiere). ✅ **82** Hash del
+  instalador (el workflow publica `SHA256SUMS.txt`; la app verifica el hash antes de
+  lanzar el instalador y aborta si no coincide — verificado con test: hash incorrecto
+  bloquea la instalación y borra el fichero).
+- ⏸️ **74** Firmar el `.exe` — **requiere comprar un certificado de firma de código**
+  (Authenticode, de una CA); no es algo que se pueda "implementar" sin ese recurso
+  externo. Dejado el paso de firma en el workflow, **inactivo** salvo que el usuario
+  añada `SIGNING_CERT_BASE64`/`SIGNING_CERT_PASSWORD` como secrets del repo.
 
 ## Lote 9 — Rendimiento, arquitectura, testing (v0.13.0)
 - ⬜ **84** Migraciones de esquema · **85** ingesta paralela · **86** modularizar app.py · **87** mypy.
