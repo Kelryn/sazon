@@ -255,9 +255,8 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ⏸️ **98** OCR de ticket/despensa por foto — requiere una librería externa de
   reconocimiento óptico (Tesseract u otra); mismo criterio que el OCR de
   recetas aparcado en el Lote 5 (#43).
-- ⏸️ **99** Recomendador por afinidad — depende del sistema de valoraciones
-  propias, que es exactamente el Lote 12 (aún no implementado); no tiene
-  sentido construir un recomendador antes de tener la señal que debe aprender.
+- ✅ **99** Recomendador por afinidad — dependía del sistema de valoraciones
+  propias (Lote 12), implementado justo después; ver `recetas_afines()` ahí.
 - ⏸️ **101** Explicación nutricional en lenguaje natural (IA opcional) · **102**
   chat opcional — ambas tocarían el flujo de IA opcional (cliente Claude/Gemini,
   ya existente solo para desambiguación de matching); un chat de "hazme la
@@ -304,24 +303,39 @@ tarjeta, tabla, cabecera, formulario…) qué quiere y cómo lo quiere. Metodolo
 Depende de decisiones del usuario (no se puede hacer en autónomo). Idealmente después
 del Lote 7 (interfaz) o cuando el usuario quiera abrir la entrevista.
 
-## Lote 12 — Sistema de valoración personal de recetas (v0.16.0) *(petición usuario)*
+## Lote 12 — Sistema de valoración personal de recetas (v0.15.0) *(petición usuario)*
 Sistema completo para **clasificar personalmente** cada receta hecha, y usarlo para
-afinar los gustos y la adherencia a la dieta. Requisitos del usuario:
-- ⬜ **Cola de valoración**: mostrar las recetas **hechas esta semana o una semana
-  anterior** que aún no se han valorado. Al valorar una, no se vuelve a pedir.
-- ⬜ **Baremos con 1–5 estrellas**: **sabor**, **frescura** (más de verano ↔ invierno),
-  **recepción estomacal** (sentó mejor/peor), y otros útiles que se propongan
-  (**saciedad**, **facilidad de preparación**, **se repetiría**, **relación calidad/precio**,
-  **apetecible en frío/tupper**). El usuario validará la lista final de baremos.
-- ⬜ **Persistencia**: la valoración se guarda; no se vuelve a solicitar. Se puede
-  **re-valorar** buscando en las recetas **ya clasificadas** (buscador/histórico).
-- ⬜ **Detalle cualitativo**: marcar **qué ingredientes** gustaron más y/o si fue el
-  **método de preparación**, para **recomendar por similitud** (ingredientes/técnica).
-- ⬜ **Uso en el motor**: la valoración personal alimenta la palatabilidad y ayuda a
-  proponer recetas afines; permite una dieta más estricta sin perder gusto.
-- ⬜ **Modelo de datos**: tabla `valoraciones` (receta_id, baremo, estrellas, fecha) +
-  `valoracion_detalle` (ingredientes/aspectos preferidos); recomendador por similitud.
-Se apoya en el histórico de planes (recetas hechas) y en el editor de recetas.
+afinar los gustos y la adherencia a la dieta. Implementado **antes** que el Lote 11
+(v0.15.0 en vez del v0.16.0 originalmente previsto) porque el Lote 11 exige una
+entrevista guiada con el usuario sección por sección — no se puede hacer en
+autónomo — mientras que este lote sí.
+- ✅ **Cola de valoración**: `/valoraciones` muestra las recetas de la comida/cena
+  del plan **actual** y del plan **inmediatamente anterior** (histórico de
+  planes, Lote 10 #109) que aún no tienen NINGUNA valoración. Al valorar una
+  (aunque sea un solo baremo), desaparece de la cola.
+- ✅ **Baremos con 1–5 estrellas**: sabor, frescura (más de verano ↔ invierno),
+  recepción estomacal, saciedad, facilidad de preparación, se repetiría,
+  relación calidad/precio, apetecible en frío/tupper — los 8 pedidos por el
+  usuario. Lista en `recetas/valoraciones.py::BAREMOS`, fácil de ajustar si el
+  usuario quiere cambiarla tras probarla.
+- ✅ **Persistencia y re-valorar**: cada (receta, baremo) es una fila que se
+  UPSERTea; re-valorar pisa la anterior, no acumula historial. `/valoraciones`
+  tiene un buscador sobre las ya clasificadas para reabrir y cambiar la nota.
+- ✅ **Detalle cualitativo**: campo de texto libre (uno por línea) para
+  ingredientes destacados y para el método de preparación, guardado en
+  `valoracion_detalle`.
+- ✅ **Uso en el motor**: `optimizacion/palatabilidad.py` mezcla la valoración
+  personal (media de todos sus baremos) con el rating bayesiano del sitio de
+  origen, con más peso para la personal (60/40) — sin tocar `servicio.py` ni
+  el solver, ya que `palatabilidad_bayesiana()` es la única función que ambos
+  consultan.
+- ✅ **Recomendador por afinidad (#99, aparcado en el Lote 10 por depender de
+  esto)**: `recetas_afines()` calcula solapamiento de ingredientes (Jaccard) y
+  prioriza las recetas afines ya bien valoradas; visible en `/receta/{id}`.
+- ✅ **Modelo de datos**: tabla `valoraciones` (receta_id, baremo, estrellas,
+  fecha; PK compuesta) + `valoracion_detalle` (ingredientes/método
+  preferidos). Sin FK a `recetas` (mismo criterio que `mapeo_ingr_producto`:
+  tabla derivada, no debe bloquear si se borra la receta).
 
 ---
 Al terminar todos los lotes → **QA final** (fase última del ROADMAP).

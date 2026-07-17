@@ -120,7 +120,7 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
 <a href="#contenido" class="skip-link">Saltar al contenido</a>
 <header><a href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG.replace('<svg', '<svg class="logo"', 1)}</a>
 <nav><a href="/">Menú</a><a href="/compra">Lista de la compra</a>
-<a href="/recetas">Recetas</a><a href="/catalogo">Catálogo</a>
+<a href="/recetas">Recetas</a><a href="/valoraciones">Valoraciones</a><a href="/catalogo">Catálogo</a>
 <a href="/buscar">Buscar</a><a href="/sustituciones">Sustituciones</a><a href="/matching">Correcciones</a>
 <a href="/historial">Historial</a><a href="/dashboard">Dashboard</a><a href="/config">Configuración</a>
 <button class="btn mini sec" type="button" onclick="alternarTema()" title="Cambiar tema claro/oscuro" aria-label="Cambiar entre tema claro y oscuro" style="margin-left:6px">🌓</button>

@@ -66,6 +66,15 @@ from ..recetas.manual import (
 from ..recetas.sustituciones import buscar_sustitutos
 from ..recetas.tags import generar_tags
 from ..recetas.utensilios import detectar_utensilios
+from ..recetas.valoraciones import (
+    BAREMOS,
+    detalle_de,
+    guardar_valoracion,
+    listar_recetas_valoradas,
+    recetas_afines,
+    recetas_para_valorar,
+    valoraciones_de,
+)
 from ..telemetria import leer_ultimos_errores, limpiar_log, registrar_error
 from ..version import __version__
 from .marca import NOMBRE
@@ -432,6 +441,21 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                     f'<ol style="padding-left:20px;line-height:1.6">{lis}</ol>'
                 )
             elaboracion = f'<div class="card">{media}</div>' if media else ""
+            # Recomendador por afinidad (#99/Lote 12): recetas parecidas por ingredientes,
+            # con las bien valoradas personalmente por delante.
+            afines = recetas_afines(conn, receta_id)
+            afines_html = ""
+            if afines:
+                filas_afines = "".join(
+                    f'<li><a class="receta" href="/receta/{html.escape(a["receta_id"])}">'
+                    f'{html.escape(a["titulo"])}</a> '
+                    f'<span class="meta">({a["similitud"] * 100:.0f}% ingredientes en común)</span></li>'
+                    for a in afines
+                )
+                afines_html = (
+                    '<div class="card"><div class="franja">Recetas afines</div>'
+                    f"<ul style='padding-left:20px'>{filas_afines}</ul></div>"
+                )
             # Escalado dinamico de raciones (#41): recalcula cantidades y coste sin
             # recargar la pagina (JS multiplica por el factor deseadas/base).
             aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
@@ -440,6 +464,8 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 + f'<div class="card"><div class="big">{html.escape(cab["titulo"])}{fav}</div>'
                 f'<p class="meta">fuente: {fuente}{tiempo}</p>'
                 + (f'<p>{chips_tags}</p>' if chips_tags else "")
+                + f'<p><a class="receta" href="/valoraciones/{html.escape(receta_id)}">'
+                "⭐ Valorar esta receta</a></p>"
                 + '<p><label>Raciones: <input type="number" id="raciones-input" '
                 f'value="{raciones}" min="1" step="1" style="width:70px" '
                 'oninput="reescalarReceta()"></label></p>'
@@ -451,6 +477,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 f'<p class="meta">El "coste usado" es la parte proporcional del producto que '
                 f"consume la receta (no el precio del paquete entero).</p></div>"
                 + elaboracion
+                + afines_html
                 + f"""<script>
 function reescalarReceta() {{
   const base = {raciones};
@@ -1506,6 +1533,103 @@ function reescalarReceta() {{
         finally:
             conn.close()
         return RedirectResponse("/recetas?msg=Favorita actualizada.", status_code=303)
+
+    # --------------------- valoración personal de recetas (Lote 12) ---------------------
+
+    @app.get("/valoraciones", response_class=HTMLResponse)
+    def valoraciones_page(q: str = "", msg: str = ""):
+        conn, _ = _conn()
+        try:
+            pendientes = recetas_para_valorar(conn)
+            valoradas = listar_recetas_valoradas(conn, q=q)
+        finally:
+            conn.close()
+        aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        filas_pend = "".join(
+            f'<li><a class="receta" href="/valoraciones/{html.escape(p["receta_id"])}">'
+            f'{html.escape(p["titulo"])}</a></li>'
+            for p in pendientes
+        ) or "<li class='meta'>Nada pendiente: todo lo cocinado recientemente ya está valorado.</li>"
+        cola = (
+            '<div class="card"><div class="franja">Recetas por valorar</div>'
+            '<p class="meta">Cocinadas esta semana o la anterior, sin valorar todavía.</p>'
+            f"<ul style='padding-left:20px'>{filas_pend}</ul></div>"
+        )
+        filas_valoradas = "".join(
+            f'<tr><td><a class="receta" href="/valoraciones/{html.escape(v["id"])}">'
+            f'{html.escape(v["titulo"])}</a></td>'
+            f'<td style="text-align:right">{v["media"]:.1f} ★ ({v["n_baremos"]} baremos)</td></tr>'
+            for v in valoradas
+        ) or '<tr><td colspan="2" class="meta">Ninguna todavía.</td></tr>'
+        historico = (
+            '<div class="card"><div class="franja">Ya valoradas (re-valorar)</div>'
+            '<form method="get" action="/valoraciones">'
+            f'<input name="q" value="{html.escape(q)}" placeholder="Buscar receta…" '
+            'style="max-width:320px;display:inline-block">'
+            ' <button class="btn mini" type="submit">Buscar</button></form>'
+            f'<table style="margin-top:10px"><tr><th>Receta</th><th>Media</th></tr>'
+            f"{filas_valoradas}</table></div>"
+        )
+        return _pagina("Valoración de recetas", aviso + cola + historico)
+
+    @app.get("/valoraciones/{receta_id}", response_class=HTMLResponse)
+    def valoracion_receta_page(receta_id: str):
+        conn, _ = _conn()
+        try:
+            titulo_fila = conn.execute(
+                "SELECT titulo FROM recetas WHERE id = ?", (receta_id,)
+            ).fetchone()
+            if titulo_fila is None:
+                return _pagina("Valorar receta", '<div class="card warn">Receta no encontrada.</div>')
+            actuales = valoraciones_de(conn, receta_id)
+            detalle = detalle_de(conn, receta_id)
+        finally:
+            conn.close()
+
+        filas_baremos = "".join(
+            f'<div class="row" style="align-items:center">'
+            f'<label style="flex:2">{html.escape(etiqueta)}</label>'
+            f'<select name="baremo__{clave}" style="flex:1">'
+            + "".join(
+                f'<option value="{n}"{" selected" if actuales.get(clave) == n else ""}>'
+                f'{"★" * n} ({n})</option>'
+                for n in range(1, 6)
+            )
+            + "</select></div>"
+            for clave, etiqueta in BAREMOS
+        )
+        cuerpo = (
+            f'<div class="card"><div class="big">{html.escape(titulo_fila["titulo"])}</div>'
+            f'<form method="post" action="/valoraciones/{html.escape(receta_id)}">'
+            f"{filas_baremos}"
+            '<label style="margin-top:10px">Ingredientes que más te gustaron (uno por línea)</label>'
+            f'<textarea name="ingredientes" rows="3">{html.escape(chr(10).join(detalle["ingrediente"]))}</textarea>'
+            '<label>¿Algo del método de preparación? (uno por línea)</label>'
+            f'<textarea name="metodo" rows="2">{html.escape(chr(10).join(detalle["metodo"]))}</textarea>'
+            '<div style="margin-top:10px"><button class="btn" type="submit">Guardar valoración</button></div>'
+            "</form></div>"
+        )
+        return _pagina("Valorar receta", cuerpo)
+
+    @app.post("/valoraciones/{receta_id}")
+    async def valoracion_receta_guardar(receta_id: str, request: Request):
+        form = await request.form()
+        estrellas = {}
+        for clave, _etiqueta in BAREMOS:
+            valor = form.get(f"baremo__{clave}")
+            if valor:
+                try:
+                    estrellas[clave] = int(valor)
+                except ValueError:
+                    pass
+        ingredientes = [t for t in str(form.get("ingredientes", "")).splitlines() if t.strip()]
+        metodo = [t for t in str(form.get("metodo", "")).splitlines() if t.strip()]
+        conn, _ = _conn()
+        try:
+            guardar_valoracion(conn, receta_id, estrellas, ingredientes, metodo)
+        finally:
+            conn.close()
+        return RedirectResponse("/valoraciones?msg=Valoración guardada.", status_code=303)
 
     # -------------------------------- configuracion --------------------------------
 

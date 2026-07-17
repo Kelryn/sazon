@@ -195,11 +195,37 @@ CREATE TABLE IF NOT EXISTS sinonimos_usuario (
     fecha     TEXT NOT NULL
 );
 
+-- Valoracion personal de recetas YA COCINADAS (Lote 12): un baremo (sabor,
+-- frescura, se_repetiria...) por fila, 1-5 estrellas. Re-valorar (UPDATE) es
+-- normal: pisa la fila anterior de ese mismo baremo, no acumula historial.
+-- Sin FK a recetas: si se borra una receta, sus valoraciones quedan huerfanas
+-- mas no deben impedir borrarla (mismo criterio que mapeo_ingr_producto).
+CREATE TABLE IF NOT EXISTS valoraciones (
+    receta_id TEXT NOT NULL,
+    baremo    TEXT NOT NULL,
+    estrellas INTEGER NOT NULL,
+    fecha     TEXT NOT NULL,
+    PRIMARY KEY (receta_id, baremo)
+);
+
+-- Detalle cualitativo de una valoracion (#Lote12): que ingrediente o que parte
+-- del metodo de preparacion gusto especialmente, para el recomendador por
+-- similitud. Se BORRA y se vuelve a insertar entera en cada guardado (no es un
+-- historial acumulativo, es "lo que se destaca de la ultima valoracion").
+CREATE TABLE IF NOT EXISTS valoracion_detalle (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    receta_id TEXT NOT NULL,
+    tipo      TEXT NOT NULL,  -- 'ingrediente' | 'metodo'
+    valor     TEXT NOT NULL,
+    fecha     TEXT NOT NULL
+);
+
 -- Indices para acelerar joins/filtros del optimizador y la lista de la compra (#83).
 -- (Los que dependen de columnas evolutivas —rol, es_batchcooking— se crean en init_db
 -- DESPUES de _migrar_columnas, ver _INDICES_POST_MIGRACION.)
 CREATE INDEX IF NOT EXISTS idx_mapeo_rid ON mapeo_ingr_producto (retailer_product_id);
 CREATE INDEX IF NOT EXISTS idx_recetas_fuente ON recetas (fuente);
+CREATE INDEX IF NOT EXISTS idx_valoracion_detalle_receta ON valoracion_detalle (receta_id);
 """
 
 # Indices sobre columnas que se añaden por ALTER (_migrar_columnas): se crean despues.
