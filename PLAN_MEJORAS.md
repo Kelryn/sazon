@@ -60,9 +60,31 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
   confiar en ellos a ciegas la primera vez.
 
 ## Lote 7 — Interfaz (v0.11.0)
-- ⬜ **61** Sin recargar (HTMX/Alpine) · **62** calendario drag&drop · **63** modo oscuro toggle.
-- ⬜ **64** Buscador global · **65** dashboard · **66** lista marcable · **67** recordatorios · **68** impresión.
-- ⬜ **69** Onboarding · **70** accesibilidad · **71** i18n · **72** móvil/PWA · **73** deshacer/rehacer.
+- ✅ **63** Modo oscuro toggle (botón 🌓, persiste en localStorage, gana al del sistema).
+- ✅ **64** Buscador global (`/buscar`: recetas + productos en una caja).
+- ✅ **65** Dashboard (`/dashboard`: sparkline SVG de gasto por semana + top recetas usadas;
+  SVG generado en servidor, sin librería de gráficos ni CDN).
+- ✅ **66** Lista marcable (`/compra`: checkboxes que tachan la línea, persisten en
+  localStorage por plan+producto — sigues aunque cierres y reabras la app).
+- ✅ **67** Recordatorio "hoy toca" (banner en el menú según el día de la semana actual;
+  nota: por nombre de día lun..dom dentro de la semana MOSTRADA, no por fecha calendario
+  real — el plan no guarda fechas exactas).
+- ✅ **68** Vista de impresión (`@media print`: oculta nav/botones, ideal para imprimir el
+  ticket o el menú).
+- ✅ **69** Onboarding (checklist "Primeros pasos" cuando falta catálogo/recetas/plan).
+- ✅ **70** Accesibilidad: enlace "saltar al contenido", `aria-label` en botones-icono
+  (flechas semana, toggle tema), `alt` descriptivo en fotos de receta.
+- ⏸️ **61** Sin recargar (SPA-like con HTMX/Alpine) — cubierto PARCIALMENTE ya (checkbox de
+  compra, escalado de receta, tema, todo vía JS+localStorage sin recargar); una migración
+  completa a HTMX es un cambio de arquitectura grande, se aparca.
+- ⏸️ **62** Calendario drag&drop — requiere UI de arrastrar + endpoint de reordenar
+  persistente; scope grande, mismo criterio que #37/#38 (sesión dedicada).
+- ⏸️ **71** i18n — extraer y traducir todas las cadenas de la app; trabajo transversal
+  grande, se aparca (la app es monolingüe ES por decisión de producto, ver CLAUDE.md).
+- ⏸️ **72** Móvil/PWA — la app corre en `pywebview` (ventana nativa local), no como sitio
+  público; un manifest/service worker no aporta valor real aquí. Aparcado por bajo ROI.
+- ⏸️ **73** Deshacer/rehacer — requiere una máquina de estados sobre las acciones del menú
+  (generar/cambiar/alternativa); scope grande, se aparca.
 
 ## Lote 8 — Distribución y robustez (v0.12.0)
 - ⬜ **74** Firmar .exe · **75** auto-descarga 2º plano · **76** changelog en la app · **77** canal beta.

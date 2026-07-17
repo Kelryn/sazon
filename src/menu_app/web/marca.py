@@ -50,7 +50,38 @@ TOKENS_CSS = f"""
     --shadow: none;
   }}
 }}
+/* Toggle MANUAL de tema (#63): gana siempre al prefers-color-scheme del sistema. */
+:root[data-theme="dark"] {{
+  --verde: #46b377; --verde-osc: #8fd6ab; --bg: #14181a; --surface: #1e2427;
+  --border: #2c3438; --text: #e8ede9; --muted: #9aa39c; --chip-bg: #26332c;
+  --chip-text: #cfe6d0; --shadow: none;
+}}
+:root[data-theme="light"] {{
+  --verde: {VERDE}; --verde-osc: {VERDE_OSCURO}; --bg: {CREMA}; --surface: #ffffff;
+  --border: #ece7dd; --text: {CARBON}; --muted: #7b8079; --chip-bg: #eef4ee;
+  --chip-text: {VERDE_OSCURO}; --shadow: 0 2px 8px rgba(30,60,40,.08);
+}}
 """
+
+# Script de arranque: aplica el tema guardado ANTES de pintar (evita parpadeo) y
+# expone alternarTema() para el boton de la cabecera.
+TEMA_SCRIPT = """<script>
+(function(){
+  var t = localStorage.getItem('sazon-tema');
+  if (t) document.documentElement.setAttribute('data-theme', t);
+})();
+function alternarTema(){
+  var actual = document.documentElement.getAttribute('data-theme');
+  var siguiente = actual === 'dark' ? 'light' : (actual === 'light' ? null : 'dark');
+  if (siguiente) {
+    document.documentElement.setAttribute('data-theme', siguiente);
+    localStorage.setItem('sazon-tema', siguiente);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.removeItem('sazon-tema');
+  }
+}
+</script>"""
 
 # Simbolo (cuenco con hoja) — cuadrado, para favicon e icono de app.
 ICONO_SVG = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">

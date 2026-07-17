@@ -17,6 +17,7 @@ Paginas:
 from __future__ import annotations
 
 import html
+import json
 import threading
 from collections import deque
 from pathlib import Path
@@ -64,7 +65,7 @@ def _pct(cfg: dict, clave_pct: str) -> float:
     _antigua, maximo, _def = _PESOS_PCT[clave_pct]
     return round(peso_interno(cfg, clave_pct) / maximo * 100)
 from ..recetas.manual import listar_favoritas, marcar_favorita
-from .marca import ESLOGAN, LOGO_SVG, NOMBRE, TOKENS_CSS, favicon_data_uri
+from .marca import ESLOGAN, LOGO_SVG, NOMBRE, TEMA_SCRIPT, TOKENS_CSS, favicon_data_uri
 
 _NOMBRE_DIA = {
     "lun": "Lunes", "mar": "Martes", "mie": "Miércoles", "jue": "Jueves",
@@ -140,6 +141,17 @@ a.receta { color: inherit; text-decoration: underline; text-decoration-color: va
 .ticket .total { font-size: 15px; font-weight: 800; text-align: right; padding-top: 8px; }
 pre.log { background: #111; color: #9f9; padding: 10px; border-radius: 8px;
   font-size: 12px; max-height: 320px; overflow: auto; }
+/* Enlace "saltar al contenido" (#70), oculto salvo con foco de teclado. */
+.skip-link { position: absolute; left: -9999px; top: 0; background: var(--verde);
+  color: #fff; padding: 8px 14px; border-radius: 0 0 8px 0; z-index: 100; }
+.skip-link:focus { left: 0; }
+/* Vista de impresion (#68): sin cabecera/nav/botones, fondo blanco, sin sombras. */
+@media print {
+  header nav, form, .btn, .arrows a[href], .off { display: none !important; }
+  body { background: #fff !important; }
+  .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
+  a[href]:after { content: "" !important; }
+}
 """
 )
 
@@ -149,12 +161,16 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{meta}
 <link rel="icon" href="{favicon_data_uri()}">
-<title>{html.escape(titulo)} · {NOMBRE}</title><style>{_ESTILO}</style></head><body>
+<title>{html.escape(titulo)} · {NOMBRE}</title><style>{_ESTILO}</style>{TEMA_SCRIPT}</head><body>
+<a href="#contenido" class="skip-link">Saltar al contenido</a>
 <header><a href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG.replace('<svg', '<svg class="logo"', 1)}</a>
 <nav><a href="/">Menú</a><a href="/compra">Lista de la compra</a>
 <a href="/recetas">Recetas</a><a href="/catalogo">Catálogo</a>
-<a href="/matching">Correcciones</a><a href="/config">Configuración</a></nav></header>
-<main>{cuerpo}</main></body></html>"""
+<a href="/buscar">Buscar</a><a href="/matching">Correcciones</a>
+<a href="/dashboard">Dashboard</a><a href="/config">Configuración</a>
+<button class="btn mini sec" type="button" onclick="alternarTema()" title="Cambiar tema claro/oscuro" aria-label="Cambiar entre tema claro y oscuro" style="margin-left:6px">🌓</button>
+</nav></header>
+<main id="contenido">{cuerpo}</main></body></html>"""
 
 
 # ------------------------- tarea de catalogo en 2º plano -------------------------
@@ -397,6 +413,34 @@ def _tabla_dias(datos: dict) -> str:
     return tabla + _resumen_grupos(datos)
 
 
+def _banner_hoy(datos: dict) -> str:
+    """Recordatorio "hoy toca" (#67): busca, dentro de la semana MOSTRADA, el dia
+    cuyo nombre coincide con el de hoy (lun..dom) y muestra que hay para comer.
+    No conoce fechas reales del plan (las semanas son abstractas lun..dom); es un
+    recordatorio por dia de la semana, no por fecha exacta."""
+    import datetime
+
+    info = datos.get("recetas_info", {}) or {}
+    hoy = DIAS_SEMANA[datetime.date.today().weekday()]
+    for dia, comida, cena, es_bc in asignar_dias(datos, DIAS_SEMANA):
+        if dia != hoy:
+            continue
+        partes = []
+        if comida:
+            partes.append(f"comida: {html.escape(info.get(comida, {}).get('titulo', comida))}")
+        if cena:
+            partes.append(f"cena: {html.escape(info.get(cena, {}).get('titulo', cena))}")
+        if not partes:
+            return ""
+        etiqueta = " 🍱 (plato único)" if es_bc else ""
+        return (
+            '<div class="card" style="border-left:4px solid var(--dorado)">'
+            f"📅 <b>Hoy ({_NOMBRE_DIA.get(hoy, hoy)}) toca{etiqueta}:</b> "
+            + " · ".join(partes) + "</div>"
+        )
+    return ""
+
+
 _NOMBRE_GRUPO = {
     "verdura": "🥦 Verdura", "legumbre": "🫘 Legumbre", "pescado": "🐟 Pescado",
     "carne_roja": "🥩 Carne roja", "carne_blanca": "🍗 Carne blanca", "cereal": "🌾 Cereal",
@@ -554,10 +598,32 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         conn, cfg = _conn()
         try:
             plan_id, semanas = cargar_plan(conn)
+            n_productos = conn.execute("SELECT COUNT(*) FROM productos").fetchone()[0]
+            n_recetas = conn.execute("SELECT COUNT(*) FROM recetas").fetchone()[0]
         finally:
             conn.close()
         aviso = _banner_actualizacion()
         aviso += f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        # Onboarding (#69): checklist de primeros pasos si aun no hay nada configurado.
+        if n_productos == 0 or n_recetas == 0 or not semanas:
+            pasos = [
+                (n_productos > 0, "Actualizar el catálogo de Alcampo",
+                 "/catalogo", "descarga los productos y precios"),
+                (n_recetas > 0, "Tener recetas en el corpus",
+                 "/recetas", "importa o añade recetas"),
+                (bool(semanas), "Generar tu primer menú",
+                 None, "usa el botón de abajo"),
+            ]
+            filas_pasos = "".join(
+                f'<li style="margin-bottom:6px">{"✅" if hecho else "⬜"} '
+                + (f'<a href="{url}">{titulo}</a>' if url and not hecho else titulo)
+                + f' <span class="meta">— {nota}</span></li>'
+                for hecho, titulo, url, nota in pasos
+            )
+            aviso += (
+                '<div class="card"><div class="franja">👋 Primeros pasos</div>'
+                f"<ol style='padding-left:20px'>{filas_pasos}</ol></div>"
+            )
 
         n_plan = int(cfg.get("semanas_plan", 1))
         form_generar = (
@@ -581,10 +647,12 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         datos = semanas[semana]
 
         ant = (
-            f'<a href="/?semana={semana - 1}">◀</a>' if semana > 1 else '<span class="off">◀</span>'
+            f'<a href="/?semana={semana - 1}" aria-label="Semana anterior">◀</a>'
+            if semana > 1 else '<span class="off" aria-hidden="true">◀</span>'
         )
         sig = (
-            f'<a href="/?semana={semana + 1}">▶</a>' if semana < n_sem else '<span class="off">▶</span>'
+            f'<a href="/?semana={semana + 1}" aria-label="Semana siguiente">▶</a>'
+            if semana < n_sem else '<span class="off" aria-hidden="true">▶</span>'
         )
         flechas = f'<span class="arrows">{ant} Semana {semana}/{n_sem} {sig}</span>'
 
@@ -654,7 +722,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         )
 
         cuerpo = (
-            aviso + form_generar + plan_card + desayunos_card
+            aviso + _banner_hoy(datos) + form_generar + plan_card + desayunos_card
             + _fila_nutrientes(datos, cfg) + cambio_card
         )
         return _pagina("Menú semanal", cuerpo)
@@ -797,7 +865,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             media = ""
             if cab["imagen"]:
                 media += (
-                    f'<img src="{html.escape(cab["imagen"])}" alt="" '
+                    f'<img src="{html.escape(cab["imagen"])}" alt="{html.escape(cab["titulo"])}" '
                     'style="max-width:100%;border-radius:10px;margin-bottom:12px">'
                 )
             if cab["instrucciones"]:
@@ -871,7 +939,7 @@ function reescalarReceta() {{
         for pasillo, lineas in compra.por_pasillo().items():
             subtotal = sum(l.total for l in lineas if l.total is not None)
             filas += (
-                f'<tr><td colspan="4" style="padding-top:10px"><b>🛒 {html.escape(pasillo)}</b> '
+                f'<tr><td colspan="5" style="padding-top:10px"><b>🛒 {html.escape(pasillo)}</b> '
                 f'<span class="meta">({subtotal:.2f} €)</span></td></tr>'
             )
             for l in lineas:
@@ -891,8 +959,14 @@ function reescalarReceta() {{
                     notas += f'<br><span class="chip">🏷️ oferta · ahorras {l.ahorro:.2f} €</span>'
                 precio = f"{l.precio_unidad:.2f}" if l.precio_unidad is not None else "—"
                 tot = f"{l.total:.2f}" if l.total is not None else "—"
+                # Lista MARCABLE (#66): checkbox persistida en localStorage (por plan +
+                # producto), para ir tachando mientras compras sin recargar la pagina.
+                item_id = html.escape(f"{compra.plan_id or ''}:{l.producto_id}")
                 filas += (
-                    f"<tr><td>{l.unidades}×</td><td>{enlace}"
+                    f'<tr class="fila-compra" data-item="{item_id}">'
+                    f'<td><input type="checkbox" class="chk-comprado" '
+                    f'onchange="marcarComprado(this)" style="width:auto"></td>'
+                    f"<td>{l.unidades}×</td><td>{enlace}"
                     f'<br><span class="meta">necesitas {l.cantidad_legible}</span>{notas}</td>'
                     f'<td style="text-align:right">{precio}</td>'
                     f'<td style="text-align:right"><b>{tot}</b></td></tr>'
@@ -919,10 +993,32 @@ function reescalarReceta() {{
             f'<p class="cab">Lista de la compra · {compra.semanas} semana'
             f"{'s' if compra.semanas != 1 else ''} de menús<br>"
             f'<span class="meta">{html.escape(compra.plan_id or "")}</span></p>'
-            f"<table><tr><th>Uds</th><th>Producto</th>"
+            f"<table><tr><th></th><th>Uds</th><th>Producto</th>"
             f'<th style="text-align:right">€/ud</th><th style="text-align:right">Total</th></tr>'
             f"{filas}</table>"
             f'<div class="total">TOTAL: {compra.total:.2f} €{ahorro_html}</div></div>'
+            + """<style>
+.fila-compra.comprado > td:not(:first-child) { opacity: .45; text-decoration: line-through; }
+</style>
+<script>
+(function(){
+  var clave = 'sazon-compra-marcada';
+  var estado = JSON.parse(localStorage.getItem(clave) || '{}');
+  document.querySelectorAll('.fila-compra').forEach(function(tr){
+    var id = tr.dataset.item;
+    var chk = tr.querySelector('.chk-comprado');
+    if (estado[id]) { chk.checked = true; tr.classList.add('comprado'); }
+  });
+  window.marcarComprado = function(chk){
+    var tr = chk.closest('.fila-compra');
+    var id = tr.dataset.item;
+    var estado = JSON.parse(localStorage.getItem(clave) || '{}');
+    if (chk.checked) { estado[id] = true; tr.classList.add('comprado'); }
+    else { delete estado[id]; tr.classList.remove('comprado'); }
+    localStorage.setItem(clave, JSON.stringify(estado));
+  };
+})();
+</script>"""
         )
         descargas = (
             '<div class="card"><div class="franja">Descargar</div>'
@@ -971,6 +1067,125 @@ function reescalarReceta() {{
             f"el formato del paquete.</p></div>"
         )
         return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None)
+
+    # --- Dashboard (#65): gasto historico y top recetas, SVG inline (sin CDN) ---
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard_page():
+        conn, _ = _conn()
+        try:
+            filas = conn.execute(
+                "SELECT plan_id, semana, creado, datos FROM planes ORDER BY creado"
+            ).fetchall()
+            n_recetas_total = conn.execute("SELECT COUNT(*) FROM recetas").fetchone()[0]
+        finally:
+            conn.close()
+
+        if not filas:
+            return _pagina(
+                "Dashboard",
+                '<div class="card">Aún no hay planes generados: genera un menú para ver '
+                "estadísticas aquí.</div>",
+            )
+
+        puntos: list[tuple[str, float]] = []  # (fecha, coste_semana)
+        conteo_recetas: dict[str, int] = {}
+        titulos: dict[str, str] = {}
+        for f in filas:
+            datos = json.loads(f["datos"])
+            puntos.append((f["creado"][:10], float(datos.get("coste_total", 0) or 0)))
+            info = datos.get("recetas_info", {}) or {}
+            for rid in set(datos.get("seleccion_comida", {}) or {}) | set(datos.get("seleccion_cena", {}) or {}):
+                conteo_recetas[rid] = conteo_recetas.get(rid, 0) + 1
+                titulos[rid] = info.get(rid, {}).get("titulo", rid)
+
+        # Sparkline SVG determinista (sin libreria de graficos, sin CDN).
+        w, h, pad = 560, 120, 20
+        costes = [c for _, c in puntos]
+        c_min, c_max = min(costes), max(costes) or 1
+        rango = (c_max - c_min) or 1
+        n = len(puntos)
+        xs = [pad + i * (w - 2 * pad) / max(1, n - 1) for i in range(n)]
+        ys = [h - pad - (c - c_min) / rango * (h - 2 * pad) for c in costes]
+        linea = " ".join(f"{x:.0f},{y:.0f}" for x, y in zip(xs, ys))
+        puntos_svg = "".join(
+            f'<circle cx="{x:.0f}" cy="{y:.0f}" r="3" fill="var(--verde)">'
+            f"<title>{html.escape(f)}: {c:.2f} €</title></circle>"
+            for (f, c), x, y in zip(puntos, xs, ys)
+        )
+        sparkline = (
+            f'<svg viewBox="0 0 {w} {h}" style="width:100%;max-width:{w}px;height:auto">'
+            f'<polyline points="{linea}" fill="none" stroke="var(--verde)" stroke-width="2"/>'
+            f"{puntos_svg}</svg>"
+        )
+
+        top = sorted(conteo_recetas.items(), key=lambda kv: -kv[1])[:10]
+        filas_top = "".join(
+            f"<tr><td>{html.escape(titulos.get(rid, rid))}</td>"
+            f'<td style="text-align:right">{n_}×</td></tr>'
+            for rid, n_ in top
+        ) or '<tr><td colspan="2" class="meta">Sin datos.</td></tr>'
+
+        cuerpo = (
+            '<div class="card"><div class="franja">📈 Gasto por semana generada</div>'
+            + sparkline
+            + f'<p class="meta">{len(puntos)} semanas registradas · '
+            f"último coste: {costes[-1]:.2f} € · media: {sum(costes) / len(costes):.2f} €</p></div>"
+            '<div class="card"><div class="franja">⭐ Recetas más usadas</div>'
+            f"<table>{filas_top}</table></div>"
+            f'<div class="card"><p class="meta">Recetas en el corpus: <b>{n_recetas_total}</b></p></div>'
+        )
+        return _pagina("Dashboard", cuerpo)
+
+    # --- Buscador global (#64): recetas + productos del catalogo en una sola caja ---
+    @app.get("/buscar", response_class=HTMLResponse)
+    def buscar_page(q: str = ""):
+        q = q.strip()
+        if not q:
+            return _pagina(
+                "Buscar",
+                '<div class="card"><form method="get" action="/buscar">'
+                '<input name="q" placeholder="Buscar recetas o productos…" autofocus '
+                'style="width:100%;max-width:420px">'
+                ' <button class="btn" type="submit">Buscar</button></form></div>',
+            )
+        conn, _ = _conn()
+        try:
+            like = f"%{q.lower()}%"
+            recetas = conn.execute(
+                "SELECT id, titulo, fuente FROM recetas WHERE lower(titulo) LIKE ? "
+                "ORDER BY titulo LIMIT 30", (like,),
+            ).fetchall()
+            productos = conn.execute(
+                "SELECT retailer_product_id, nombre, precio_eur FROM productos "
+                "WHERE lower(nombre) LIKE ? ORDER BY nombre LIMIT 30", (like,),
+            ).fetchall()
+        finally:
+            conn.close()
+        filas_r = "".join(
+            f'<tr><td><a class="receta" href="/receta/{html.escape(r["id"])}">'
+            f'{html.escape(r["titulo"])}</a></td><td class="meta">{html.escape(r["fuente"] or "")}</td></tr>'
+            for r in recetas
+        ) or '<tr><td colspan="2" class="meta">Sin recetas.</td></tr>'
+        def _fila_producto(p):
+            precio = f'{p["precio_eur"]:.2f} €' if p["precio_eur"] is not None else "—"
+            return (
+                f'<tr><td>{html.escape(p["nombre"])}</td>'
+                f'<td style="text-align:right">{precio}</td></tr>'
+            )
+
+        filas_p = "".join(_fila_producto(p) for p in productos) or (
+            '<tr><td colspan="2" class="meta">Sin productos.</td></tr>'
+        )
+        cuerpo = (
+            '<div class="card"><form method="get" action="/buscar">'
+            f'<input name="q" value="{html.escape(q)}" style="width:100%;max-width:420px">'
+            ' <button class="btn" type="submit">Buscar</button></form></div>'
+            f'<div class="card"><div class="franja">Recetas ({len(recetas)})</div>'
+            f"<table>{filas_r}</table></div>"
+            f'<div class="card"><div class="franja">Productos del catálogo ({len(productos)})</div>'
+            f"<table>{filas_p}</table></div>"
+        )
+        return _pagina(f"Buscar «{q}»", cuerpo)
 
     # --- Cola de correcciones de matching (#13/#14): asignar producto a mano ---
     @app.get("/matching", response_class=HTMLResponse)
