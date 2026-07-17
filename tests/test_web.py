@@ -64,6 +64,18 @@ def test_actualizaciones_solo_boton(client, monkeypatch):
     assert "última versión" in r2.text
 
 
+def test_recetas_tiene_formulario_importar(client):
+    r = client.get("/recetas")
+    assert r.status_code == 200
+    assert "Importar receta por URL" in r.text
+    assert 'action="/recetas/importar"' in r.text
+
+
+def test_importar_url_invalida_no_rompe(client):
+    r = client.post("/recetas/importar", data={"url": "no-es-una-url"}, follow_redirects=True)
+    assert r.status_code == 200
+
+
 def test_matching_correcciones(client):
     r = client.get("/matching")
     assert r.status_code == 200

@@ -674,7 +674,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
     # ----------------------------- detalle de receta -----------------------------
 
     @app.get("/receta/{receta_id}", response_class=HTMLResponse)
-    def receta_detalle(receta_id: str):
+    def receta_detalle(receta_id: str, msg: str = ""):
         conn, _cfg = _conn()
         try:
             cab = conn.execute(
@@ -779,8 +779,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             elaboracion = f'<div class="card">{media}</div>' if media else ""
             # Escalado dinamico de raciones (#41): recalcula cantidades y coste sin
             # recargar la pagina (JS multiplica por el factor deseadas/base).
+            aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
             cuerpo = (
-                f'<div class="card"><div class="big">{html.escape(cab["titulo"])}{fav}</div>'
+                aviso
+                + f'<div class="card"><div class="big">{html.escape(cab["titulo"])}{fav}</div>'
                 f'<p class="meta">fuente: {fuente}{tiempo}</p>'
                 + (f'<p>{chips_tags}</p>' if chips_tags else "")
                 + '<p><label>Raciones: <input type="number" id="raciones-input" '
@@ -1004,6 +1006,41 @@ function reescalarReceta() {{
         invalidar_cache_recetas()  # el mapeo cambio -> recalcular coste/nutricion
         msg = f"«{ing}» asignado." if ok else "No se pudo asignar (producto no encontrado)."
         return RedirectResponse(f"/matching?msg={quote(msg)}", status_code=303)
+
+    # --- Importar receta por URL (#42), reutiliza recipe-scrapers (583 sitios, #48) ---
+    @app.post("/recetas/importar")
+    async def recetas_importar(url: str = Form("")):
+        from datetime import datetime, timezone
+
+        from ..recetas.repositorio import RecetaRepository
+        from ..recetas.scraper import RecetaScraper
+
+        url = url.strip()
+        if not url.startswith("http"):
+            return RedirectResponse(
+                f"/recetas?msg={quote('Pega una URL válida (http/https).')}", status_code=303
+            )
+        try:
+            with RecetaScraper() as scraper:
+                receta = scraper.scrape(url)
+        except Exception as e:  # noqa: BLE001 - red/parseo: se informa, no se rompe
+            return RedirectResponse(f"/recetas?msg={quote(f'No se pudo importar: {e}')}", status_code=303)
+        if receta is None:
+            return RedirectResponse(
+                f"/recetas?msg={quote('Esa página no tiene una receta reconocible (schema.org).')}",
+                status_code=303,
+            )
+        conn, _ = _conn()
+        try:
+            RecetaRepository(conn).upsert_receta(
+                receta, datetime.now(timezone.utc).isoformat(timespec="seconds")
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        invalidar_cache_recetas()
+        msg = f"Receta importada: «{receta.titulo}». Recuerda emparejarla con el catálogo."
+        return RedirectResponse(f"/receta/{receta.id}?msg={quote(msg)}", status_code=303)
 
     @app.post("/matching/sinonimo")
     async def matching_sinonimo(palabra: str = Form(""), reemplazo: str = Form("")):
@@ -1302,6 +1339,14 @@ function reescalarReceta() {{
             f"<table>{filas or '<tr><td class=meta>Sin resultados.</td></tr>'}</table>"
             f'<p class="meta">Mostrando {len(recetas)} recetas (las tuyas primero). Las del '
             "catálogo (scrapeadas) solo se pueden ver; las tuyas se pueden editar.</p></div>"
+            '<div class="card"><div class="franja">Importar receta por URL</div>'
+            '<form method="post" action="/recetas/importar" class="row">'
+            '<div style="flex:3 1 320px"><input name="url" placeholder="https://…" '
+            'style="width:100%"></div>'
+            '<div><button class="btn" type="submit">Importar</button></div></form>'
+            '<p class="note">Funciona con webs de recetas que publican datos estructurados '
+            "(schema.org) — cientos de sitios soportados. Tras importar, empareja sus "
+            "ingredientes con el catálogo (Correcciones) para que entre en el menú.</p></div>"
         )
         return _pagina("Recetas", cuerpo)
 
