@@ -1,6 +1,6 @@
 [project]
 name = "menu-app"
-version = "0.8.2"
+version = "0.9.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -47,6 +47,7 @@ menu-app-generar-menu = "menu_app.optimizacion.cli:main"
 menu-app-clasificar-batchcooking = "menu_app.optimizacion.batchcooking_cli:main"
 menu-app-clasificar-platos = "menu_app.optimizacion.rol_plato_cli:main"
 menu-app-receta = "menu_app.recetas.manual_cli:main"
+menu-app-dedup-recetas = "menu_app.recetas.dedup_cli:main"
 menu-app-carrito = "menu_app.carrito.cli:main"
 menu-app = "menu_app.escritorio:main"          # programa de escritorio (ventana nativa)
 menu-app-web = "menu_app.web.server:main"      # solo el servidor web (sin ventana)

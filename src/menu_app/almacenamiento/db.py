@@ -54,6 +54,9 @@ _COLUMNAS_EVOLUTIVAS: dict[str, list[tuple[str, str]]] = {
         # batchcooking) y pensada para CENA (aptitud de cena maxima).
         ("es_plato_unico", "INTEGER"),
         ("es_cena", "INTEGER"),
+        # Etiquetas separadas por coma (rapido, picante, niños...) para filtrar
+        # recetas por afinidad (#46). NULL/"" = sin etiquetas.
+        ("tags", "TEXT"),
     ],
 }
 

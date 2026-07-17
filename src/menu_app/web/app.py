@@ -46,6 +46,7 @@ from ..optimizacion.nutrientes import objetivos_semanales
 from ..optimizacion.planes import asignar_dias, cargar_plan, generar_plan, regenerar_semana
 from ..optimizacion.servicio import _PESOS_PCT, config_nutricion, peso_interno
 from ..recetas.catalogo_ingredientes import ingredientes_catalogo, nutrientes_receta
+from ..recetas.tags import generar_tags
 from ..recetas.manual import (
     UNIDADES,
     cargar_receta,
@@ -677,7 +678,8 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         conn, _cfg = _conn()
         try:
             cab = conn.execute(
-                "SELECT titulo, raciones, fuente, url, es_favorita FROM recetas WHERE id = ?",
+                "SELECT titulo, raciones, fuente, url, es_favorita, imagen, instrucciones, "
+                "tiempo_total_min, es_batchcooking, es_plato_unico FROM recetas WHERE id = ?",
                 (receta_id,),
             ).fetchone()
             if cab is None:
@@ -708,7 +710,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                     if gramos is not None:
                         estimado = ' <span class="meta">(≈ estimado)</span>'
                         um = "g"
-                cant = f"{gramos:.0f} {um}{estimado}" if gramos is not None else "—"
+                cant_html = (
+                    f'<span class="cant-val" data-base="{gramos}">{gramos:.0f}</span> {um}{estimado}'
+                    if gramos is not None else "—"
+                )
 
                 rid = mapeo.get(ing["nombre_normalizado"])
                 prod_html, precio_html = '<span class="meta">sin producto</span>', "—"
@@ -732,9 +737,9 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                         if gramos is not None and factor and p["precio_por_unidad"] is not None:
                             coste_ing = gramos * factor * p["precio_por_unidad"]
                             total += coste_ing
-                            precio_html = f"{coste_ing:.2f} €"
+                            precio_html = f'<span class="coste-val" data-base="{coste_ing}">{coste_ing:.2f}</span> €'
                 filas += (
-                    f"<tr><td>{html.escape(ing['texto_original'][:70])}</td><td>{cant}</td>"
+                    f"<tr><td>{html.escape(ing['texto_original'][:70])}</td><td>{cant_html}</td>"
                     f"<td>{prod_html}</td><td>{precio_html}</td></tr>"
                 )
             raciones = cab["raciones"] or 1
@@ -745,15 +750,71 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 if cab["url"] and not cab["url"].startswith("manual://")
                 else html.escape(cab["fuente"] or "manual")
             )
+            tiempo = (
+                f' · ⏱ {cab["tiempo_total_min"]} min' if cab["tiempo_total_min"] else ""
+            )
+            # Etiquetas deterministas (#46).
+            ings_norm = {i["nombre_normalizado"] for i in ingredientes if i["nombre_normalizado"]}
+            tags = generar_tags(
+                tiempo_total_min=cab["tiempo_total_min"], ingredientes_norm=ings_norm,
+                es_batchcooking=bool(cab["es_batchcooking"]), es_plato_unico=bool(cab["es_plato_unico"]),
+            )
+            chips_tags = "".join(
+                f'<span class="chip">{html.escape(t)}</span>' for t in tags
+            )
+            # Imagen (#40) y pasos de elaboración (#39), cuando la fuente los trae.
+            media = ""
+            if cab["imagen"]:
+                media += (
+                    f'<img src="{html.escape(cab["imagen"])}" alt="" '
+                    'style="max-width:100%;border-radius:10px;margin-bottom:12px">'
+                )
+            if cab["instrucciones"]:
+                pasos = [p.strip() for p in cab["instrucciones"].split("\n") if p.strip()]
+                lis = "".join(f"<li>{html.escape(p)}</li>" for p in pasos)
+                media += (
+                    '<div class="franja">Elaboración</div>'
+                    f'<ol style="padding-left:20px;line-height:1.6">{lis}</ol>'
+                )
+            elaboracion = f'<div class="card">{media}</div>' if media else ""
+            # Escalado dinamico de raciones (#41): recalcula cantidades y coste sin
+            # recargar la pagina (JS multiplica por el factor deseadas/base).
             cuerpo = (
                 f'<div class="card"><div class="big">{html.escape(cab["titulo"])}{fav}</div>'
-                f'<p class="meta">{raciones} raciones · fuente: {fuente}</p>'
+                f'<p class="meta">fuente: {fuente}{tiempo}</p>'
+                + (f'<p>{chips_tags}</p>' if chips_tags else "")
+                + '<p><label>Raciones: <input type="number" id="raciones-input" '
+                f'value="{raciones}" min="1" step="1" style="width:70px" '
+                'oninput="reescalarReceta()"></label></p>'
                 f'<table><tr><th>Ingrediente</th><th>Cantidad</th>'
                 f"<th>Producto Alcampo</th><th>Coste usado</th></tr>{filas}</table>"
-                f'<p class="franja">Coste de la receta completa: {total:.2f} € '
-                f'<span class="meta">({total / raciones:.2f} €/ración)</span></p>'
+                f'<p class="franja">Coste de la receta (<span id="raciones-mostradas">{raciones}</span> '
+                f'raciones): <span id="coste-total">{total:.2f}</span> € '
+                f'<span class="meta">(<span id="coste-racion">{total / raciones:.2f}</span> €/ración)</span></p>'
                 f'<p class="meta">El "coste usado" es la parte proporcional del producto que '
                 f"consume la receta (no el precio del paquete entero).</p></div>"
+                + elaboracion
+                + f"""<script>
+function reescalarReceta() {{
+  const base = {raciones};
+  const deseadas = Math.max(1, parseFloat(document.getElementById('raciones-input').value) || base);
+  const factor = deseadas / base;
+  let totalCoste = 0;
+  document.querySelectorAll('.cant-val').forEach(el => {{
+    const b = parseFloat(el.dataset.base);
+    el.textContent = (b * factor).toFixed(0);
+  }});
+  document.querySelectorAll('.coste-val').forEach(el => {{
+    const b = parseFloat(el.dataset.base);
+    const v = b * factor;
+    totalCoste += v;
+    el.textContent = v.toFixed(2);
+  }});
+  document.getElementById('coste-total').textContent = totalCoste.toFixed(2);
+  document.getElementById('coste-racion').textContent = (totalCoste / deseadas).toFixed(2);
+  document.getElementById('raciones-mostradas').textContent = deseadas;
+}}
+</script>"""
             )
             return _pagina(cab["titulo"], cuerpo)
         finally:
