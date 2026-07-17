@@ -20,7 +20,26 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass, field
 
+from ..recetas.utensilios import detectar_utensilios
 from .procesado import nivel_procesado
+
+
+def _calidad_receta(n_ingredientes: int, instrucciones: str | None, rating_count: int | None) -> float:
+    """Puntuacion 0..1 de calidad de la FICHA (#49): instrucciones presentes y con
+    contenido, nº de ingredientes en un rango razonable (ni 1 ni 40), y valoraciones
+    con base solida (mas raters = mas fiable). Determinista, sin IA."""
+    s = 0.0
+    if instrucciones and len(instrucciones.strip()) >= 60:
+        s += 0.4
+    if 3 <= n_ingredientes <= 15:
+        s += 0.3
+    elif n_ingredientes > 0:
+        s += 0.1
+    if rating_count and rating_count >= 5:
+        s += 0.3
+    elif rating_count:
+        s += 0.1
+    return min(1.0, s)
 
 # Nutrientes que manejamos (coinciden con las columnas *_100g de productos).
 NUTRIENTES = [
@@ -146,6 +165,11 @@ class RecetaCalculada:
     procesado: float = 0.0
     # Alergenos (tokens en minuscula) presentes en los productos de la receta (#17).
     alergenos: set[str] = field(default_factory=set)
+    # Puntuacion de calidad de la ficha 0..1 (#49): instrucciones presentes, nº de
+    # ingredientes razonable, valoraciones con base solida.
+    calidad: float = 0.5
+    # Utensilios detectados por palabras clave en titulo/instrucciones (#47).
+    utensilios: set[str] = field(default_factory=set)
 
     @property
     def cobertura(self) -> float:
@@ -208,7 +232,8 @@ def calcular_receta(
 ) -> RecetaCalculada:
     cab = conn.execute(
         "SELECT titulo, raciones, fuente, es_batchcooking, rol, es_favorita, "
-        "es_plato_unico, es_cena, tiempo_total_min FROM recetas WHERE id = ?",
+        "es_plato_unico, es_cena, tiempo_total_min, instrucciones, rating_count "
+        "FROM recetas WHERE id = ?",
         (receta_id,),
     ).fetchone()
     ingredientes = conn.execute(
@@ -304,6 +329,12 @@ def calcular_receta(
         procesado=(gramos_ultra / sum(productos_gramos.values())
                    if productos_gramos else 0.0),
         alergenos=alergenos_receta,
+        calidad=_calidad_receta(
+            len(ingredientes), cab["instrucciones"] if cab else None, cab["rating_count"] if cab else None
+        ),
+        utensilios=detectar_utensilios(
+            cab["titulo"] if cab else "", cab["instrucciones"] if cab else None
+        ),
         tiempo_total_min=(cab["tiempo_total_min"] if cab else None),
         n_ingredientes=len(ingredientes),
         n_costeados=costeados,

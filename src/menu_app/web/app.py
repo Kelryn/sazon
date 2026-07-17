@@ -33,6 +33,7 @@ from ..version import __version__
 from ..ingesta.categories import FOOD_CATEGORY_ROOTS
 from ..configuracion import DIAS_SEMANA, cargar_config, guardar_overlay
 from ..optimizacion.compra import lista_compra
+from ..optimizacion.desayunos import sugerir_desayunos
 from ..optimizacion.exportar import (
     compra_a_csv,
     compra_a_pdf,
@@ -47,6 +48,7 @@ from ..optimizacion.planes import asignar_dias, cargar_plan, generar_plan, regen
 from ..optimizacion.servicio import _PESOS_PCT, config_nutricion, peso_interno
 from ..recetas.catalogo_ingredientes import ingredientes_catalogo, nutrientes_receta
 from ..recetas.tags import generar_tags
+from ..recetas.utensilios import detectar_utensilios
 from ..recetas.manual import (
     UNIDADES,
     cargar_receta,
@@ -606,6 +608,28 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             f"Pulsa una receta para ver sus ingredientes y precios.</p></div>"
         )
 
+        # Sugerencia de desayunos/meriendas (#50): opcional, orientativa (no forma
+        # parte del coste/nutricion optimizado de comida+cena).
+        desayunos_card = ""
+        if cfg.get("incluir_desayunos"):
+            conn2, _ = _conn()
+            try:
+                sugeridos = sugerir_desayunos(conn2, dias=int(datos.get("dias", 7)))
+            finally:
+                conn2.close()
+            if sugeridos:
+                filas_des = "".join(
+                    f'<tr><td>{html.escape(s.titulo)}</td>'
+                    f'<td style="text-align:right">{s.coste_racion:.2f} €/ración</td></tr>'
+                    for s in sugeridos
+                )
+                desayunos_card = (
+                    '<div class="card"><div class="franja">🥣 Desayunos/meriendas (sugerencia)</div>'
+                    f"<table>{filas_des}</table>"
+                    '<p class="meta">Orientativo: no está optimizado junto con comida y cena '
+                    "(actívalo/desactívalo en Configuración).</p></div>"
+                )
+
         info = datos.get("recetas_info", {}) or {}
         usadas = sorted(
             set(datos.get("seleccion_comida", {}) or {}) | set(datos.get("seleccion_cena", {}) or {}),
@@ -626,7 +650,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             f"nutrientes y coste.</p></div>"
         )
 
-        cuerpo = aviso + form_generar + plan_card + _fila_nutrientes(datos, cfg) + cambio_card
+        cuerpo = (
+            aviso + form_generar + plan_card + desayunos_card
+            + _fila_nutrientes(datos, cfg) + cambio_card
+        )
         return _pagina("Menú semanal", cuerpo)
 
     @app.post("/generar")
@@ -759,8 +786,9 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 tiempo_total_min=cab["tiempo_total_min"], ingredientes_norm=ings_norm,
                 es_batchcooking=bool(cab["es_batchcooking"]), es_plato_unico=bool(cab["es_plato_unico"]),
             )
+            utensilios = sorted(detectar_utensilios(cab["titulo"], cab["instrucciones"]))  # #47
             chips_tags = "".join(
-                f'<span class="chip">{html.escape(t)}</span>' for t in tags
+                f'<span class="chip">{html.escape(t)}</span>' for t in tags + utensilios
             )
             # Imagen (#40) y pasos de elaboración (#39), cuando la fuente los trae.
             media = ""
@@ -1496,6 +1524,14 @@ function reescalarReceta() {{
                 '<p class="note">Excluye recetas cuyos productos contengan estos alérgenos '
                 "(según datos disponibles; no garantiza ausencia total).</p></div>"
             )
+            + (
+                '<div style="flex:2 1 320px"><label>Utensilios que NO tienes</label>'
+                '<input name="utensilios_excluidos" '
+                f'value="{html.escape(", ".join(cfg.get("utensilios_excluidos", []) or []))}" '
+                'placeholder="horno, olla exprés, freidora">'
+                '<p class="note">Excluye recetas que los requieran (detectado por título/'
+                "instrucciones).</p></div>"
+            )
             + "</div><div class='row'>"
             + _slider("sabor_pct", "Peso del sabor", _pct(cfg, "sabor_pct"),
                       "0 % = solo importa el precio; 100 % = manda el sabor (recetas mejor "
@@ -1663,6 +1699,10 @@ function reescalarReceta() {{
                 ],
                 "alergenos": [
                     t.strip() for t in str(form.get("alergenos", "")).split(",") if t.strip()
+                ],
+                "utensilios_excluidos": [
+                    t.strip() for t in str(form.get("utensilios_excluidos", "")).split(",")
+                    if t.strip()
                 ],
                 "batchcooking": {"dias": [str(d) for d in form.getlist("dias_bc")]},
             }

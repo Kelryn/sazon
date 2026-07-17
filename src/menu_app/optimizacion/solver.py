@@ -41,6 +41,7 @@ class RecetaOpt:
     nutri: str = ""  # letra Nutri-Score A-E (#2), "" si no se pudo calcular
     procesado: float = 0.0  # fraccion 0..1 de gramos ultraprocesados (NOVA 4) (#3)
     estacionalidad: float = 0.0  # 0..1: fraccion de productos de temporada este mes (#11)
+    calidad: float = 0.5  # 0..1: calidad de la ficha (instrucciones, nº ingr., ratings) (#49)
 
 
 # Nutrientes cuyo SUELO se trata como blando (se penaliza el deficit en vez de
@@ -268,6 +269,7 @@ def optimizar_comida_cena(
     def _bonus_comida(r: RecetaOpt) -> float:
         bonus = peso_palatabilidad * r.palatabilidad + peso_salud * r.salud
         bonus += peso_estacionalidad * r.estacionalidad  # premia temporada (#11)
+        bonus += 0.3 * r.calidad  # desempate fijo por calidad de la ficha (#49)
         bonus -= peso_ultraprocesado * r.procesado  # penaliza ultraprocesados (#3)
         if r.es_favorita:
             bonus += peso_favorita

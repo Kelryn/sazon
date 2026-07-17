@@ -38,7 +38,7 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 
 ## Lote 5 — Recetas (v0.9.0)
 - ✅ **39** Pasos de elaboración · ✅ **40** fotos · ✅ **41** escalado · ✅ **42** importar por URL · ⏸️ **43** OCR (requiere libreria externa, aparcado).
-- 🚧 **44** Valoraciones propias (ver Lote 12) · ✅ **45** dedup · ✅ **46** tags · ⬜ **47** utensilios · ✅ **48** más fuentes (recipe-scrapers soporta 583 sitios) · ⬜ **49** calidad · ⬜ **50** desayunos/meriendas.
+- ⏸️ **44** Valoraciones propias (ver Lote 12, es el mismo sistema completo) · ✅ **45** dedup · ✅ **46** tags · ✅ **47** utensilios · ✅ **48** más fuentes (recipe-scrapers soporta 583 sitios) · ✅ **49** calidad · ✅ **50** desayunos/meriendas (sugeridor separado del MILP).
 
 ## Lote 6 — Carrito y compra (v0.10.0)
 - ⬜ **51** Vía 1 API directa · **52** cantidad exacta · **53** sustituir agotados · **54** sincronizar.

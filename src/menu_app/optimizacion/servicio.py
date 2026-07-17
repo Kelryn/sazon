@@ -259,6 +259,10 @@ def generar_menu(
     alergenos_usuario = [
         a.strip().lower() for a in (cfg.get("alergenos") or []) if str(a).strip()
     ]
+    # Utensilios que NO tienes (#47): se excluye la receta si los requiere.
+    utensilios_excluidos = {
+        u.strip().lower() for u in (cfg.get("utensilios_excluidos") or []) if str(u).strip()
+    }
     # Tiempo maximo de preparacion (#30): descarta recetas que tarden mas (0 = sin tope).
     tiempo_max = int(cfg.get("tiempo_max_receta_min", 0) or 0)
     peso_salud = peso_interno(cfg, "salud_pct")
@@ -283,6 +287,7 @@ def generar_menu(
     descartadas_excluidas = 0
     descartadas_tiempo = 0
     descartadas_alergeno = 0
+    descartadas_utensilio = 0
     for c in calculadas:
         if excluidos_ing and any(
             term in ing for ing in c.ingredientes_norm for term in excluidos_ing
@@ -296,6 +301,9 @@ def generar_menu(
             term in al for al in c.alergenos for term in alergenos_usuario
         ):
             descartadas_alergeno += 1
+            continue
+        if utensilios_excluidos and c.utensilios & utensilios_excluidos:
+            descartadas_utensilio += 1
             continue
         # Fuera si falta cobertura, si el ingrediente PRINCIPAL no se puede comprar,
         # o (exigir_todos_ingredientes) si falta CUALQUIER ingrediente no opcional:
@@ -338,6 +346,7 @@ def generar_menu(
             nutri=(lambda p: nutri_score(p, _g)[1] if p else "")(c.nutricion_por_100g()),
             procesado=c.procesado,
             estacionalidad=puntua_estacionalidad(c.ingredientes_norm, mes_temporada),
+            calidad=c.calidad,
         )
 
     # Dias batchcooking: si viene el flag global, TODOS; si no, los marcados en config.
@@ -398,5 +407,6 @@ def generar_menu(
             "descartadas_excluidas": descartadas_excluidas,
             "descartadas_tiempo": descartadas_tiempo,
             "descartadas_alergeno": descartadas_alergeno,
+            "descartadas_utensilio": descartadas_utensilio,
         },
     )

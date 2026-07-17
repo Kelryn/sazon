@@ -16,6 +16,9 @@ perfil:
   actividad: moderado
   objetivo: mantener
 comidas_por_dia: ["comida", "cena"]     # franjas que planifica el menu (comida y cena)
+incluir_desayunos: false                 # sugerencia de desayunos/meriendas (#50): rota
+                                        # recetas de rol=desayuno, orientativa (no entra
+                                        # en el coste/nutricion optimizado de comida+cena)
 # Reparto de nutrientes A LO LARGO DEL DIA (minimo 3 comidas). El menu planifica
 # comida y cena; su parte del dia sale del reparto recomendado FEN/AESAN
 # (nutricion.pct_comida ~35% + nutricion.pct_cena ~30% = 65% del dia).
@@ -63,6 +66,10 @@ ingredientes_excluidos: []
 # Alergenos a EVITAR (#17): se excluye la receta si alguno de sus productos lo contiene
 # (segun datos de OFF/bop; no garantiza ausencia total). Ej: [gluten, lactosa, frutos secos].
 alergenos: []
+# Utensilios que NO tienes (#47): se excluye la receta si los requiere. Detectados en
+# titulo/instrucciones: horno, olla exprés, batidora, robot de cocina, freidora,
+# plancha, microondas, barbacoa.
+utensilios_excluidos: []
 # Parametros del solver MILP (avanzado): tiempo maximo (s) y gap relativo (0-1). 0 = sin
 # limite. Utiles si con racionalizacion alta el calculo tarda demasiado.
 tiempo_max_solver: 0
