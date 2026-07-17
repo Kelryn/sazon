@@ -55,6 +55,15 @@ class Match:
     metodo: str
 
 
+# Marcas propias de Alcampo (marca blanca): mas baratas a igualdad de producto (#16).
+_MARCAS_BLANCAS = ("alcampo", "auchan", "producto alcampo", "cultivamos lo bueno")
+
+
+def _es_marca_blanca(marca: str | None, nombre: str) -> bool:
+    texto = f"{marca or ''} {nombre or ''}".lower()
+    return any(m in texto for m in _MARCAS_BLANCAS)
+
+
 def _stem(token: str) -> str:
     """Stem MUY ligero para casar singular/plural en español (acelga~acelgas,
     limon~limones, huevo~huevos). Solo quita el plural, no el genero."""
@@ -75,12 +84,18 @@ class IndiceProductos:
     crudos: list[str] = field(default_factory=list)  # nombre sin acentos, para negaciones
     tokens: list[list[str]] = field(default_factory=list)  # tokens (stem) por producto, en orden
     invertido: dict[str, set[int]] = field(default_factory=dict)  # token stem -> idxs producto
+    precios: list[float] = field(default_factory=list)  # precio_por_unidad (inf si None)
+    es_blanca: list[bool] = field(default_factory=list)  # marca blanca (Alcampo/Auchan)
 
     @classmethod
-    def construir(cls, productos: list[tuple[str, str, str | None]]) -> "IndiceProductos":
+    def construir(cls, productos: list[tuple]) -> "IndiceProductos":
         rids, nombres, textos, crudos, tokens = [], [], [], [], []
+        precios: list[float] = []
+        es_blanca: list[bool] = []
         invertido: dict[str, set[int]] = {}
-        for rid, nombre, marca in productos:
+        for prod in productos:
+            rid, nombre, marca = prod[0], prod[1], prod[2]
+            precio = prod[3] if len(prod) > 3 else None
             texto = texto_producto(nombre, marca)
             if not texto:
                 continue
@@ -89,11 +104,13 @@ class IndiceProductos:
             nombres.append(nombre)
             textos.append(texto)
             crudos.append(quitar_acentos(nombre))
+            precios.append(float(precio) if precio is not None else float("inf"))
+            es_blanca.append(_es_marca_blanca(marca, nombre))
             toks = [_stem(t) for t in texto.split()]
             tokens.append(toks)
             for t in set(toks):
                 invertido.setdefault(t, set()).add(idx)
-        return cls(rids, nombres, textos, crudos, tokens, invertido)
+        return cls(rids, nombres, textos, crudos, tokens, invertido, precios, es_blanca)
 
     def __len__(self) -> int:
         return len(self.rids)
@@ -172,8 +189,16 @@ class MatcherLexico:
             plenos.append((idx, score, extra, cabeza))
         if not plenos:
             return None
-        # Mejor: primero palabra-cabeza, luego menos tokens extra, luego nombre corto.
-        mejor = min(plenos, key=lambda p: (-p[3], p[2], len(self.indice.nombres[p[0]])))
+        # Mejor: primero palabra-cabeza y menos tokens extra (pureza); a IGUALDAD de
+        # pureza, marca blanca (#16) y luego el mas barato (#15), y por ultimo nombre
+        # corto. Asi entre productos equivalentes se elige el que mas ahorra.
+        def _clave(p):
+            idx = p[0]
+            precio = self.indice.precios[idx] if self.indice.precios else float("inf")
+            blanca = self.indice.es_blanca[idx] if self.indice.es_blanca else False
+            return (-p[3], p[2], 0 if blanca else 1, precio, len(self.indice.nombres[idx]))
+
+        mejor = min(plenos, key=_clave)
         return mejor[0], mejor[1]
 
     def candidatos(self, clave: str, k: int = 8) -> list[Match]:

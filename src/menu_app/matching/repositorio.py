@@ -7,12 +7,17 @@ class MatchingRepository:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
 
-    def productos_aptos(self) -> list[tuple[str, str, str | None]]:
-        """(retailer_product_id, nombre, marca) de los productos aptos para receta."""
+    def productos_aptos(self) -> list[tuple[str, str, str | None, float | None]]:
+        """(retailer_product_id, nombre, marca, precio_por_unidad) de los productos
+        aptos para receta. El precio permite desempatar por el mas barato (#15/#16)."""
         cur = self.conn.execute(
-            "SELECT retailer_product_id, nombre, marca FROM productos WHERE apto_receta = 1"
+            "SELECT retailer_product_id, nombre, marca, precio_por_unidad "
+            "FROM productos WHERE apto_receta = 1"
         )
-        return [(r["retailer_product_id"], r["nombre"], r["marca"]) for r in cur.fetchall()]
+        return [
+            (r["retailer_product_id"], r["nombre"], r["marca"], r["precio_por_unidad"])
+            for r in cur.fetchall()
+        ]
 
     def ingredientes_distintos(self) -> list[str]:
         """Nombres normalizados distintos de ingredientes de receta (no vacios)."""

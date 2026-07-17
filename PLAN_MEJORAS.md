@@ -32,8 +32,8 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ✅ **11** Estacionalidad · ✅ **12** fibra por comida.
 
 ## Lote 4 — Matching (v0.8.0)
-- ⬜ **13** Cola de correcciones · **14** aprender sinónimos · **15** más barato · **16** marca blanca.
-- ⬜ **17** Alérgenos · **18** densidad por ingrediente · **19** multi-formato · **20** desambiguación.
+- ⬜ **13** Cola de correcciones · **14** aprender sinónimos · ✅ **15** más barato · ✅ **16** marca blanca.
+- ⬜ ⏸️ **17** Alérgenos (sin datos OFF) · ✅ **18** densidad por ingrediente · **19** multi-formato · **20** desambiguación.
 - ⬜ **21** Umbral fuzzy · **22** editor de sinónimos.
 
 ## Lote 5 — Recetas (v0.9.0)

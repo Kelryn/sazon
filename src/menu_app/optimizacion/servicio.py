@@ -254,6 +254,11 @@ def generar_menu(
     excluidos_ing = [
         e.strip().lower() for e in (cfg.get("ingredientes_excluidos") or []) if str(e).strip()
     ]
+    # Alergenos del usuario (#17): se EXCLUYE la receta si alguno de sus productos
+    # contiene ese alergeno (segun datos disponibles; no garantiza ausencia total).
+    alergenos_usuario = [
+        a.strip().lower() for a in (cfg.get("alergenos") or []) if str(a).strip()
+    ]
     # Tiempo maximo de preparacion (#30): descarta recetas que tarden mas (0 = sin tope).
     tiempo_max = int(cfg.get("tiempo_max_receta_min", 0) or 0)
     peso_salud = peso_interno(cfg, "salud_pct")
@@ -277,6 +282,7 @@ def generar_menu(
     descartadas_rol = 0
     descartadas_excluidas = 0
     descartadas_tiempo = 0
+    descartadas_alergeno = 0
     for c in calculadas:
         if excluidos_ing and any(
             term in ing for ing in c.ingredientes_norm for term in excluidos_ing
@@ -285,6 +291,11 @@ def generar_menu(
             continue
         if tiempo_max and c.tiempo_total_min and c.tiempo_total_min > tiempo_max:
             descartadas_tiempo += 1
+            continue
+        if alergenos_usuario and any(
+            term in al for al in c.alergenos for term in alergenos_usuario
+        ):
+            descartadas_alergeno += 1
             continue
         # Fuera si falta cobertura, si el ingrediente PRINCIPAL no se puede comprar,
         # o (exigir_todos_ingredientes) si falta CUALQUIER ingrediente no opcional:
@@ -386,5 +397,6 @@ def generar_menu(
         meta={
             "descartadas_excluidas": descartadas_excluidas,
             "descartadas_tiempo": descartadas_tiempo,
+            "descartadas_alergeno": descartadas_alergeno,
         },
     )

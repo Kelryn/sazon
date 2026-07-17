@@ -44,6 +44,40 @@ _FACTOR_PRECIO = {  # g o ml del ingrediente -> multiplicador del precio_por_uni
     "100ml": 1 / 100,
 }
 
+# Densidad (g/ml) por ingrediente para convertir volumen a peso en la NUTRICION
+# (antes se asumia 1 ml ~ 1 g para todo; #18). Solo se aplica cuando el ingrediente
+# esta medido en ml. Fuentes: valores tipicos. Default 1.0 (agua/caldo/leche ~1).
+_DENSIDAD_G_ML = {
+    "aceite": 0.92, "miel": 1.42, "sirope": 1.33, "melaza": 1.40, "nata": 1.01,
+    "leche condensada": 1.29, "vino": 0.99, "vinagre": 1.01, "salsa de soja": 1.15,
+    "mantequilla": 0.91, "margarina": 0.92, "mayonesa": 0.91, "mostaza": 1.05,
+    "ketchup": 1.14, "tomate frito": 1.05, "zumo": 1.05, "cerveza": 1.01, "ron": 0.95,
+    "brandy": 0.95, "licor": 0.98, "agua": 1.0, "caldo": 1.0, "leche": 1.03,
+}
+
+
+def _densidad(nombre_norm: str) -> float:
+    nombre = nombre_norm or ""
+    for kw, d in _DENSIDAD_G_ML.items():
+        if kw in nombre:
+            return d
+    return 1.0
+
+
+def _tokens_alergenos(texto: str) -> set[str]:
+    """Normaliza el campo de alergenos (OFF/bop): 'en:gluten, es:lactosa' -> {gluten,
+    lactosa}. Quita prefijos de idioma y espacios (#17)."""
+    out: set[str] = set()
+    for parte in (texto or "").replace(";", ",").split(","):
+        t = parte.strip().lower()
+        if ":" in t:
+            t = t.split(":", 1)[1]
+        t = t.strip()
+        if t:
+            out.add(t)
+    return out
+
+
 # Peso comestible aproximado (g) de UNA pieza de alimentos que las recetas cuentan
 # por unidades ("1 cebolla", "2 zanahorias") en vez de en gramos. Permite costear
 # y nutrir esos ingredientes (si no, se descartaban y bajaba la cobertura). Fuentes:
@@ -110,6 +144,8 @@ class RecetaCalculada:
     # Fraccion 0..1 de los gramos de la receta que provienen de productos
     # ULTRAPROCESADOS (NOVA 4). 0 = nada ultraprocesado. (#3)
     procesado: float = 0.0
+    # Alergenos (tokens en minuscula) presentes en los productos de la receta (#17).
+    alergenos: set[str] = field(default_factory=set)
 
     @property
     def cobertura(self) -> float:
@@ -150,7 +186,7 @@ def _es_opcional(texto: str) -> bool:
 
 
 def _cargar_productos(conn: sqlite3.Connection) -> dict[str, dict]:
-    extra = ["categoria", "subcategoria", "ingredientes", "nova"]  # para el nivel de procesado (#3)
+    extra = ["categoria", "subcategoria", "ingredientes", "nova", "alergenos"]  # procesado (#3) + alergenos (#17)
     cols = ", ".join(
         ["retailer_product_id", "precio_por_unidad", "unidad_medida"]
         + list(_COL_100G.values()) + extra
@@ -192,6 +228,7 @@ def calcular_receta(
     productos_usados: set[str] = set()
     productos_gramos: dict[str, float] = {}
     gramos_ultra = 0.0
+    alergenos_receta: set[str] = set()
     ingredientes_norm: set[str] = set()
 
     for ing in ingredientes:
@@ -226,6 +263,8 @@ def calcular_receta(
         productos_gramos[rid] = productos_gramos.get(rid, 0.0) + cantidad  # para la sobra (#23)
         if nivel_procesado(prod) >= 4:  # gramos ultraprocesados (#3)
             gramos_ultra += cantidad
+        if prod.get("alergenos"):  # alergenos del producto (#17)
+            alergenos_receta.update(_tokens_alergenos(prod["alergenos"]))
 
         # Coste del ingrediente.
         precio_u = prod["precio_por_unidad"]
@@ -233,11 +272,16 @@ def calcular_receta(
         if precio_u is not None and factor is not None:
             coste += cantidad * factor * precio_u
 
-        # Nutricion del ingrediente (por 100 g/ml -> por la cantidad usada).
+        # Nutricion del ingrediente (por 100 g -> por los GRAMOS usados). Si el
+        # ingrediente esta en ml, se convierte a gramos por su densidad (#18): antes
+        # se asumia 1 ml ~ 1 g, impreciso para aceite (0,92), miel (1,42), etc.
+        gramos_nut = cantidad
+        if (ing["unidad_metrica"] or "").lower() == "ml":
+            gramos_nut = cantidad * _densidad(ing["nombre_normalizado"])
         for n in NUTRIENTES:
             v100 = prod[_COL_100G[n]]
             if v100 is not None:
-                nutricion[n] += cantidad / 100.0 * v100
+                nutricion[n] += gramos_nut / 100.0 * v100
         costeados += 1
 
     return RecetaCalculada(
@@ -259,6 +303,7 @@ def calcular_receta(
         ingredientes_norm=ingredientes_norm,
         procesado=(gramos_ultra / sum(productos_gramos.values())
                    if productos_gramos else 0.0),
+        alergenos=alergenos_receta,
         tiempo_total_min=(cab["tiempo_total_min"] if cab else None),
         n_ingredientes=len(ingredientes),
         n_costeados=costeados,

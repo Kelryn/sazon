@@ -1264,6 +1264,14 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 'placeholder="hígado, coliflor, cilantro">'
                 '<p class="note">Separa por comas. Se excluye cualquier receta que los use.</p></div>'
             )
+            + (
+                '<div style="flex:2 1 320px"><label>Alérgenos a evitar</label>'
+                '<input name="alergenos" '
+                f'value="{html.escape(", ".join(cfg.get("alergenos", []) or []))}" '
+                'placeholder="gluten, lactosa, frutos secos">'
+                '<p class="note">Excluye recetas cuyos productos contengan estos alérgenos '
+                "(según datos disponibles; no garantiza ausencia total).</p></div>"
+            )
             + "</div><div class='row'>"
             + _slider("sabor_pct", "Peso del sabor", _pct(cfg, "sabor_pct"),
                       "0 % = solo importa el precio; 100 % = manda el sabor (recetas mejor "
@@ -1428,6 +1436,9 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 "ingredientes_excluidos": [
                     t.strip() for t in str(form.get("ingredientes_excluidos", "")).split(",")
                     if t.strip()
+                ],
+                "alergenos": [
+                    t.strip() for t in str(form.get("alergenos", "")).split(",") if t.strip()
                 ],
                 "batchcooking": {"dias": [str(d) for d in form.getlist("dias_bc")]},
             }

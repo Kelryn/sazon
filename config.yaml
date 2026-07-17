@@ -58,6 +58,9 @@ presupuesto_max_semana: 0
 # Ingredientes que NO quieres en el menu (lista negra): se excluye la receta si alguno
 # de sus ingredientes contiene uno de estos terminos. Ej: [higado, coliflor, cilantro].
 ingredientes_excluidos: []
+# Alergenos a EVITAR (#17): se excluye la receta si alguno de sus productos lo contiene
+# (segun datos de OFF/bop; no garantiza ausencia total). Ej: [gluten, lactosa, frutos secos].
+alergenos: []
 # Parametros del solver MILP (avanzado): tiempo maximo (s) y gap relativo (0-1). 0 = sin
 # limite. Utiles si con racionalizacion alta el calculo tarda demasiado.
 tiempo_max_solver: 0
