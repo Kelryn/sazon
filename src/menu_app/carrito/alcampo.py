@@ -53,6 +53,8 @@ _BASES_ANADIR = (
 )
 # "+" para subir cantidad: aria-label "Aumentar la cantidad de {nombre} en el carrito".
 _SEL_INCREMENTO = 'button[aria-label^="Aumentar la cantidad"]'
+# "-" para bajar cantidad (confirmado en vivo: se uso para limpiar la cesta de prueba).
+_SEL_DECREMENTO = 'button[aria-label^="Reducir la cantidad"]'
 # Disparadores para ABRIR el login desde la home si la URL directa no lo muestra.
 _SEL_ABRIR_LOGIN = (
     'a[href="/login"]',
@@ -311,9 +313,11 @@ async def _a_localizar_anadir(page: Any, nombre: str):
     return None, None
 
 
-async def _a_localizar_incremento(page: Any, nombre: str):
+async def _a_localizar_por_selector(page: Any, selector: str, nombre: str):
+    """Localiza, entre los botones que casan `selector`, el del producto `nombre`
+    (por su aria-label) o el primero visible si no hay coincidencia exacta."""
     try:
-        botones = page.locator(_SEL_INCREMENTO)
+        botones = page.locator(selector)
         total = await botones.count()
         nucleo = _norm(nombre)
         primero = None
@@ -332,6 +336,14 @@ async def _a_localizar_incremento(page: Any, nombre: str):
         return primero
     except Exception:  # noqa: BLE001
         return None
+
+
+async def _a_localizar_incremento(page: Any, nombre: str):
+    return await _a_localizar_por_selector(page, _SEL_INCREMENTO, nombre)
+
+
+async def _a_localizar_decremento(page: Any, nombre: str):
+    return await _a_localizar_por_selector(page, _SEL_DECREMENTO, nombre)
 
 
 _JS_BOTONES = """
@@ -353,8 +365,31 @@ async def _a_diagnostico_botones(page: Any) -> list[dict[str, str]]:
         return []
 
 
+async def _a_sincronizar_cantidad(page: Any, it: _Linea, timeout_ms: int) -> int:
+    """Reduce a 0 la cantidad ya en la cesta de `it` (clic en '-' hasta que
+    reaparece el boton de anadir), para luego reponer la cantidad EXACTA pedida en
+    vez de sumar sobre lo que hubiera (#54). Devuelve el nº de clics de reduccion
+    aplicados (informativo)."""
+    clics = 0
+    for _ in range(60):  # cota de seguridad; el stepper normal no pasa de unas pocas unidades
+        dec = await _a_localizar_decremento(page, it.nombre)
+        if dec is None:
+            break
+        try:
+            await dec.click(timeout=timeout_ms)
+        except Exception:  # noqa: BLE001
+            break
+        clics += 1
+        try:
+            await page.wait_for_timeout(300)  # deja que la SPA actualice el stepper
+        except Exception:  # noqa: BLE001
+            pass
+    return clics
+
+
 async def _a_procesar_linea(
-    page: Any, it: _Linea, *, dry_run: bool, timeout_ms: int, log: Callable[[str], None]
+    page: Any, it: _Linea, *, dry_run: bool, timeout_ms: int,
+    sincronizar: bool = False, log: Callable[[str], None] = print,
 ) -> ResultadoLinea:
     url = _url_producto(it.producto_id, it.url)
     etiqueta = f"{it.nombre or it.producto_id} (x{it.unidades})"
@@ -386,10 +421,19 @@ async def _a_procesar_linea(
     sel, boton = await _a_localizar_anadir(page, it.nombre)
     if boton is None:
         if await _a_localizar_incremento(page, it.nombre) is not None:
-            log(f"  ✓ {etiqueta}: ya estaba en la cesta")
-            return ResultadoLinea(it.producto_id, it.nombre, it.unidades, True, "ya en la cesta")
-        log(f"  ✗ {etiqueta}: no encontre boton de anadir")
-        return ResultadoLinea(it.producto_id, it.nombre, it.unidades, False, "sin boton de anadir")
+            if not sincronizar:
+                log(f"  ✓ {etiqueta}: ya estaba en la cesta (sumando encima)")
+                return ResultadoLinea(it.producto_id, it.nombre, it.unidades, True, "ya en la cesta")
+            # Sincronizar (#54): vaciar esta linea y reponer la cantidad EXACTA, en
+            # vez de sumar sobre lo que hubiera ya en el carrito.
+            clics = await _a_sincronizar_cantidad(page, it, timeout_ms)
+            sel, boton = await _a_localizar_anadir(page, it.nombre)
+            if boton is None:
+                log(f"  ✗ {etiqueta}: no reaparecio el boton de anadir tras vaciar ({clics} clics)")
+                return ResultadoLinea(it.producto_id, it.nombre, it.unidades, False, "error sincronizando")
+        else:
+            log(f"  ✗ {etiqueta}: no encontre boton de anadir")
+            return ResultadoLinea(it.producto_id, it.nombre, it.unidades, False, "sin boton de anadir")
 
     # ¿Agotado / deshabilitado? (aria-disabled o texto "Agotado").
     try:
@@ -437,6 +481,27 @@ async def _a_procesar_linea(
 
 # --- orquestacion ------------------------------------------------------------
 
+async def _a_vaciar_carrito(page: Any, timeout_ms: int, log: Callable[[str], None]) -> int:
+    """Vacia la cesta por completo (#55): en /basket, pulsa "-" repetidamente sobre
+    CUALQUIER producto visible hasta que no queda ninguno. Best-effort, acotado."""
+    try:
+        await page.goto(_URL_CESTA, wait_until="domcontentloaded", timeout=timeout_ms)
+    except Exception:  # noqa: BLE001
+        return 0
+    clics = 0
+    for _ in range(500):  # cota de seguridad (cestas normales no llegan a esto)
+        try:
+            dec = page.locator(_SEL_DECREMENTO).first
+            if await dec.count() == 0 or not await dec.is_visible():
+                break
+            await dec.click(timeout=timeout_ms)
+            clics += 1
+            await page.wait_for_timeout(250)
+        except Exception:  # noqa: BLE001
+            break
+    return clics
+
+
 async def _anadir_async(
     items: list[_Linea],
     *,
@@ -448,6 +513,8 @@ async def _anadir_async(
     mantener_abierto_ms: int,
     esperar_enter: bool,
     paralelo: int,
+    sincronizar: bool,
+    vaciar_antes: bool,
     log: Callable[[str], None],
 ) -> ResultadoCarrito:
     from playwright.async_api import async_playwright
@@ -517,6 +584,11 @@ async def _anadir_async(
                 finally:
                     await tab.close()
 
+            # 1.5) Vaciar la cesta ANTES de anadir (#55), si se pidio.
+            if vaciar_antes and not dry_run and res.logueado:
+                vaciados = await _a_vaciar_carrito(page, timeout_ms, log)
+                log(f"Cesta vaciada: {vaciados} unidades quitadas.")
+
             # 2) PARALELO: abrir una pestaña por producto y anadir TODOS a la vez.
             tope = paralelo if paralelo and paralelo > 0 else len(items)
             sem = asyncio.Semaphore(max(1, tope))
@@ -529,8 +601,17 @@ async def _anadir_async(
                 async with sem:
                     tab = await ctx.new_page()
                     linea = await _a_procesar_linea(
-                        tab, it, dry_run=dry_run, timeout_ms=timeout_ms, log=log
+                        tab, it, dry_run=dry_run, timeout_ms=timeout_ms,
+                        sincronizar=sincronizar, log=log,
                     )
+                    # Reintento inteligente (#60): solo para fallos TRANSITORIOS (red/
+                    # navegacion), no para agotado/sin-boton (esos no mejoran reintentando).
+                    if not linea.ok and linea.detalle in ("ficha no cargo", "error"):
+                        log(f"  ↻ {it.nombre or it.producto_id}: reintento tras fallo transitorio...")
+                        linea = await _a_procesar_linea(
+                            tab, it, dry_run=dry_run, timeout_ms=timeout_ms,
+                            sincronizar=sincronizar, log=log,
+                        )
                     return tab, linea
 
             resultados = await asyncio.gather(*[_tarea(it) for it in items])
@@ -596,6 +677,8 @@ def anadir_al_carrito(
     mantener_abierto_ms: int = 0,
     esperar_enter: bool = False,
     paralelo: int = _PARALELO_DEFECTO,
+    sincronizar: bool = False,
+    vaciar_antes: bool = False,
     log: Callable[[str], None] = print,
 ) -> ResultadoCarrito:
     """Abre Alcampo con sesion persistente y anade (en PARALELO) la compra.
@@ -603,6 +686,9 @@ def anadir_al_carrito(
     - `lineas`: LineaCompra (optimizacion.compra) o dicts con producto_id/nombre/url/unidades.
     - `dry_run=True`: solo comprueba el boton de anadir; NO toca el carrito.
     - `paralelo`: nº maximo de productos anadiendose a la vez (0 = todos a la vez).
+    - `sincronizar` (#54): si un producto ya esta en la cesta, lo ajusta a la cantidad
+      EXACTA pedida (vacia y repone) en vez de sumar por encima.
+    - `vaciar_antes` (#55): vacia la cesta entera antes de empezar a anadir.
     - `headless=False`: ventana visible (necesaria para el login manual).
     """
     items = _normalizar_lineas(lineas)
@@ -622,6 +708,8 @@ def anadir_al_carrito(
             mantener_abierto_ms=mantener_abierto_ms,
             esperar_enter=esperar_enter,
             paralelo=paralelo,
+            sincronizar=sincronizar,
+            vaciar_antes=vaciar_antes,
             log=log,
         )
     )

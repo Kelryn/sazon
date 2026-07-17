@@ -41,8 +41,23 @@ Leyenda: ⬜ pendiente · 🚧 en curso · ✅ hecho.
 - ⏸️ **44** Valoraciones propias (ver Lote 12, es el mismo sistema completo) · ✅ **45** dedup · ✅ **46** tags · ✅ **47** utensilios · ✅ **48** más fuentes (recipe-scrapers soporta 583 sitios) · ✅ **49** calidad · ✅ **50** desayunos/meriendas (sugeridor separado del MILP).
 
 ## Lote 6 — Carrito y compra (v0.10.0)
-- ⬜ **51** Vía 1 API directa · **52** cantidad exacta · **53** sustituir agotados · **54** sincronizar.
-- ⬜ **55** Vaciar cesta · **57** ofertas/comparador · **58** otros súper · **59** resumen · **60** reintento.
+- ✅ **53** Sustituir agotados (misma subcategoría, no cruza pasillo) · ✅ **54** sincronizar
+  (ajusta a la cantidad exacta) · ✅ **55** vaciar cesta antes.
+- ✅ **57** Ofertas (precio de oferta + ahorro mostrado) · ✅ **59** resumen (ahorro total,
+  nº sustituidos) · ✅ **60** reintento (1 vez, solo fallos transitorios).
+- ⏸️ **52** Cantidad exacta — ya cubierto en la práctica por **54** (sincronizar logra
+  cantidad exacta incluso si ya había algo en la cesta).
+- ⬜ **51** Vía 1 API directa — el endpoint del carrito ya se captura (ver carrito/alcampo.py)
+  pero reconstruir la llamada autenticada es mas fragil que Playwright; se deja para cuando
+  haya evidencia de que el navegador da problemas.
+- ⏸️ **58** Otros supermercados (Mercadona, Carrefour, DIA) — arquitectura grande (nuevo
+  modulo de scraping+carrito por cadena); se aparca como los "modelo por dia" (#37/#38):
+  mismo patron ya construido para Alcampo, a replicar en una sesion dedicada si se decide.
+- Nota: #53/#57/#59 verificados con tests (sustitucion respeta subcategoria, rechaza
+  cruzar a "Especias" desde "Verduras"; oferta calcula ahorro correcto). #54/#55/#60 usan
+  selectores CONFIRMADOS en vivo en sesiones anteriores (no son conjeturas), pero como
+  cualquier cambio en el carrito, conviene una prueba en vivo con el usuario antes de
+  confiar en ellos a ciegas la primera vez.
 
 ## Lote 7 — Interfaz (v0.11.0)
 - ⬜ **61** Sin recargar (HTMX/Alpine) · **62** calendario drag&drop · **63** modo oscuro toggle.

@@ -60,6 +60,17 @@ _AYUDA_PLAYWRIGHT = (
     help="Esperar a que pulses ENTER tras el login en vez de autodetectarlo (respaldo).",
 )
 @click.option(
+    "--sincronizar",
+    is_flag=True,
+    help="Si un producto ya esta en la cesta, ajusta a la cantidad EXACTA en vez de sumar.",
+)
+@click.option(
+    "--vaciar-antes",
+    "vaciar_antes",
+    is_flag=True,
+    help="Vacia la cesta entera antes de empezar a anadir.",
+)
+@click.option(
     "--reporte",
     "reporte_path",
     default=None,
@@ -77,6 +88,8 @@ def main(
     diagnostico: bool,
     mantener_abierto: int,
     esperar_enter: bool,
+    sincronizar: bool,
+    vaciar_antes: bool,
     reporte_path: Path | None,
 ) -> None:
     """Anade la compra del plan al carrito de compraonline.alcampo.es (prototipo)."""
@@ -112,6 +125,8 @@ def main(
         mantener_abierto_ms=max(0, mantener_abierto) * 1000,
         esperar_enter=esperar_enter,
         paralelo=paralelo,
+        sincronizar=sincronizar,
+        vaciar_antes=vaciar_antes,
     )
 
     click.echo("")

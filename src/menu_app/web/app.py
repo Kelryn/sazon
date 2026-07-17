@@ -217,7 +217,7 @@ def _lanzar_actualizacion(cfg: dict, categorias: list[str] | None = None) -> boo
     return True
 
 
-def _lanzar_carrito(config_path) -> tuple[bool, str]:
+def _lanzar_carrito(config_path, sincronizar: bool = False, vaciar_antes: bool = False) -> tuple[bool, str]:
     """Envia la compra del plan al carrito de Alcampo en 2º plano (abre el navegador)."""
     if _CARRITO["activa"]:
         return False, "Ya hay un envío en marcha."
@@ -242,7 +242,10 @@ def _lanzar_carrito(config_path) -> tuple[bool, str]:
 
     def _correr():
         try:
-            res = anadir_al_carrito(lineas, dry_run=False, headless=False, log=_CARRITO["log"].append)
+            res = anadir_al_carrito(
+                lineas, dry_run=False, headless=False, log=_CARRITO["log"].append,
+                sincronizar=sincronizar, vaciar_antes=vaciar_antes,
+            )
             _CARRITO["resumen"] = (
                 f"Enviados {res.n_ok}/{len(res.lineas)} productos al carrito. "
                 f"Total de la cesta: {res.total_cesta or '—'}."
@@ -877,11 +880,20 @@ function reescalarReceta() {{
                     f"{html.escape(l.nombre[:46])}</a>"
                     if l.url else html.escape(l.nombre[:46])
                 )
+                # Marcas de sustitucion por agotado (#53) y oferta (#57).
+                notas = ""
+                if l.sustituido:
+                    notas += (
+                        f'<br><span class="meta" title="Agotado: {html.escape(l.nombre_original or "")}">'
+                        "🔄 sustituido (agotado)</span>"
+                    )
+                if l.en_oferta:
+                    notas += f'<br><span class="chip">🏷️ oferta · ahorras {l.ahorro:.2f} €</span>'
                 precio = f"{l.precio_unidad:.2f}" if l.precio_unidad is not None else "—"
                 tot = f"{l.total:.2f}" if l.total is not None else "—"
                 filas += (
                     f"<tr><td>{l.unidades}×</td><td>{enlace}"
-                    f'<br><span class="meta">necesitas {l.cantidad_legible}</span></td>'
+                    f'<br><span class="meta">necesitas {l.cantidad_legible}</span>{notas}</td>'
                     f'<td style="text-align:right">{precio}</td>'
                     f'<td style="text-align:right"><b>{tot}</b></td></tr>'
                 )
@@ -892,6 +904,16 @@ function reescalarReceta() {{
                 f'<p class="meta">Sin producto asignado (cómpralos a tu criterio): {lista}'
                 + ("…" if len(compra.sin_producto) > 20 else "") + "</p>"
             )
+        if compra.agotados_sin_sustituto:
+            lista_ag = ", ".join(html.escape(s) for s in compra.agotados_sin_sustituto[:20])
+            sin += (
+                f'<p class="warn">⊘ Agotados sin alternativa en su categoría (cómpralos a tu '
+                f"criterio o cambia de producto): {lista_ag}</p>"
+            )
+        ahorro_html = (
+            f' <span class="chip">🏷️ ahorras {compra.ahorro_total:.2f} € en ofertas</span>'
+            if compra.ahorro_total > 0 else ""
+        )
         ticket = (
             f'<div class="ticket"><h2>ALCAMPO</h2>'
             f'<p class="cab">Lista de la compra · {compra.semanas} semana'
@@ -900,7 +922,7 @@ function reescalarReceta() {{
             f"<table><tr><th>Uds</th><th>Producto</th>"
             f'<th style="text-align:right">€/ud</th><th style="text-align:right">Total</th></tr>'
             f"{filas}</table>"
-            f'<div class="total">TOTAL: {compra.total:.2f} €</div></div>'
+            f'<div class="total">TOTAL: {compra.total:.2f} €{ahorro_html}</div></div>'
         )
         descargas = (
             '<div class="card"><div class="franja">Descargar</div>'
@@ -916,6 +938,12 @@ function reescalarReceta() {{
         else:
             accion = (
                 '<form method="post" action="/carrito/enviar">'
+                '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px">'
+                '<input type="checkbox" name="sincronizar" value="1" style="width:auto"> '
+                "Ajustar a la cantidad exacta si ya está en la cesta</label>"
+                '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px">'
+                '<input type="checkbox" name="vaciar_antes" value="1" style="width:auto"> '
+                "Vaciar la cesta antes de empezar</label><br>"
                 '<button class="btn" type="submit">🛒 Enviar la compra al carrito de Alcampo</button>'
                 "</form>"
             )
@@ -1097,8 +1125,11 @@ function reescalarReceta() {{
         return RedirectResponse("/matching?msg=Sinónimo borrado.", status_code=303)
 
     @app.post("/carrito/enviar")
-    def carrito_enviar():
-        _ok, msg = _lanzar_carrito(config_path)
+    async def carrito_enviar(request: Request):
+        form = await request.form()
+        sincronizar = form.get("sincronizar") == "1"
+        vaciar_antes = form.get("vaciar_antes") == "1"
+        _ok, msg = _lanzar_carrito(config_path, sincronizar=sincronizar, vaciar_antes=vaciar_antes)
         return RedirectResponse(f"/compra?msg={quote(msg)}", status_code=303)
 
     @app.get("/compra.csv")

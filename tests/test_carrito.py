@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from menu_app.carrito.alcampo import (
     BASE_URL,
+    _SEL_DECREMENTO,
+    _SEL_INCREMENTO,
     ResultadoCarrito,
     ResultadoLinea,
     _normalizar_lineas,
     _url_producto,
+    anadir_al_carrito,
 )
 from menu_app.optimizacion.compra import LineaCompra
 
@@ -56,3 +59,16 @@ def test_resultado_carrito_ok_y_conteo():
     assert r.n_ok == 1
     assert r.ok is False
     assert ResultadoCarrito(dry_run=True).ok is False  # sin lineas no es "ok"
+
+
+def test_selector_decremento_es_espejo_del_incremento():
+    # Ambos confirmados en vivo: "Aumentar/Reducir la cantidad de {producto}...".
+    assert _SEL_INCREMENTO.startswith('button[aria-label^="Aumentar la cantidad"')
+    assert _SEL_DECREMENTO.startswith('button[aria-label^="Reducir la cantidad"')
+
+
+def test_anadir_al_carrito_acepta_sincronizar_y_vaciar_antes_sin_navegador():
+    # Ruta rapida (sin items): no debe intentar abrir el navegador ni fallar por
+    # los parametros nuevos (#54/#55), solo por la lista vacia.
+    res = anadir_al_carrito([], sincronizar=True, vaciar_antes=True)
+    assert res.lineas == []
