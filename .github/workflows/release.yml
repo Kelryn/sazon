@@ -58,11 +58,8 @@ jobs:
       # como SIGNING_CERT_PASSWORD (Settings -> Secrets and variables -> Actions).
       # Sin esos secrets, este paso no hace nada (se salta solo).
       - name: Firmar binarios (si hay certificado configurado)
-        if: ${{ secrets.SIGNING_CERT_BASE64 != '' }}
+        if: ${{ env.SIGNING_CERT_BASE64 != '' }}
         shell: pwsh
-        env:
-          SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
-          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
         run: |
           $bytes = [Convert]::FromBase64String($env:SIGNING_CERT_BASE64)
           [IO.File]::WriteAllBytes("cert.pfx", $bytes)
