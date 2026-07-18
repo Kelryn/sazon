@@ -423,6 +423,11 @@ mejoras futuras, ninguna bloqueante:
    de `nutrientes.py` ya lo admite.
 5. **Selección por día del batchcooking** (sección C) — el modelo por día ya existe; falta
    afinar postre-vs-plato y la mezcla de días tanda/no-tanda.
+6. **Selectores de valoración (Lote 11)** — en el formulario de valoración, "ingredientes
+   que más te gustaron" y "método de preparación" se rediseñaron como **desplegables** con
+   `+`/`−` para añadir/quitar filas. Falta **definir/curar las listas de opciones existentes**
+   (ingredientes de la receta y un catálogo de métodos de preparación) y afinar esa UX
+   (persistencia, opciones libres vs. cerradas). Ver `DISENO_UI.md` → "Valoraciones — formulario".
 
 ## Notas de diseño vigentes
 - **Sin APIs de IA en el camino por defecto.** El desambiguador LLM (Gemini/Claude) queda

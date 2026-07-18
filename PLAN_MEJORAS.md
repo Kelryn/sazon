@@ -303,6 +303,20 @@ tarjeta, tabla, cabecera, formulario…) qué quiere y cómo lo quiere. Metodolo
 Depende de decisiones del usuario (no se puede hacer en autónomo). Idealmente después
 del Lote 7 (interfaz) o cuando el usuario quiera abrir la entrevista.
 
+**Progreso (fase de diseño, en curso)** — la guía de diseño viva se escribe en
+**`DISENO_UI.md`** (fuente de verdad de cada pantalla). Mockups **aprobados** por
+el usuario hasta ahora:
+- ✅ Menú semanal (barra de herramientas, tabla, botones, tabla de nutrientes, modo ayuda).
+- ✅ Detalle de receta.
+- ✅ Lista de la compra.
+- ✅ Recetas (listado + importar).
+- ✅ Editor de receta *(nuevo flag "Desayuno" pendiente de cablear: columna `es_desayuno` + migración)*.
+- ✅ Catálogo.
+- ✅ Valoraciones (lista + formulario).
+- ⬜ Pendientes de revisar: Buscar · Sustituciones · Correcciones · Historial · Dashboard · Configuración.
+- ⬜ Tras aprobar todas: implementar (sin CDN), modo ayuda con textos editables en `.md`,
+  y decidir el hogar en la barra de las secciones que no caben (menú "más").
+
 ## Lote 12 — Sistema de valoración personal de recetas (v0.15.0) *(petición usuario)*
 Sistema completo para **clasificar personalmente** cada receta hecha, y usarlo para
 afinar los gustos y la adherencia a la dieta. Implementado **antes** que el Lote 11
