@@ -39,7 +39,15 @@ def crear_backup(db_path: Path, config_usuario_path: Path | None = None,
     # Microsegundos en el nombre: dos backups creados muy seguidos (p.ej. el de
     # seguridad justo antes de restaurar) no deben colisionar y sobrescribirse.
     marca = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+    # A prueba de colisiones: en Windows el reloj tiene granularidad gruesa y dos
+    # backups muy seguidos (el de seguridad justo antes de restaurar) pueden caer
+    # en la misma marca de microsegundos. Si el nombre ya existe, se añade un
+    # sufijo -N para no sobrescribir el anterior.
     destino = carpeta / f"sazon-backup-{marca}.zip"
+    contador = 2
+    while destino.exists():
+        destino = carpeta / f"sazon-backup-{marca}-{contador}.zip"
+        contador += 1
     with zipfile.ZipFile(destino, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(db_path, arcname="menu.db")
         if config_usuario_path and Path(config_usuario_path).exists():
