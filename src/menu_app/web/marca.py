@@ -11,55 +11,81 @@ from __future__ import annotations
 NOMBRE = "Sazón"
 ESLOGAN = "Tu menú semanal sano, rico y al mejor precio"
 
-# --- Paleta (mediterranea: verde fresco + terracota + crema/dorado) ---
-VERDE = "#2f8f5b"        # primario
-VERDE_OSCURO = "#1e5e3a"  # acento/texto sobre claro
-TERRACOTA = "#e0603a"     # acento calido (tomate)
-DORADO = "#e7a400"        # favoritos / detalles
-CREMA = "#fbf8f2"         # fondo claro
-CARBON = "#20302a"        # texto claro
+# --- Paleta (Lote 11: "Oliva y Mostaza", limpio/minimalista) ---
+VERDE = "#4d5d3a"        # oliva primario (barra, acentos)
+VERDE_OSCURO = "#3d4a2e"  # oliva oscuro (texto de acento)
+TERRACOTA = "#b5482f"     # rojo/terracota (avisos, quitar)
+DORADO = "#c9962e"        # mostaza (favoritos, indicador activo)
+CREMA = "#fdfcf8"         # fondo claro
+CARBON = "#2a2a1f"        # texto principal
+
+# Verde vivo para acciones (generar, guardar, actualizar).
+VERDE_ACCION = "#3f7a3a"
+VERDE_ACCION_HOVER = "#4d9147"
 
 # Variables CSS (design tokens) para claro y oscuro.
 TOKENS_CSS = f"""
 :root {{
   --verde: {VERDE};
   --verde-osc: {VERDE_OSCURO};
+  --verde-accion: {VERDE_ACCION};
+  --verde-accion-h: {VERDE_ACCION_HOVER};
   --terracota: {TERRACOTA};
   --dorado: {DORADO};
   --bg: {CREMA};
   --surface: #ffffff;
-  --border: #ece7dd;
+  --border: #eeead9;
   --text: {CARBON};
-  --muted: #7b8079;
-  --chip-bg: #eef4ee;
+  --muted: #8f8a75;
+  --chip-bg: #eef1e6;
   --chip-text: {VERDE_OSCURO};
-  --shadow: 0 2px 8px rgba(30,60,40,.08);
+  --sec-bg: #dde4d0;
+  --sec-bg-h: #c9d4b3;
+  --neutro-bg: #f1eee2;
+  --neutro-bg-h: #e9e5d5;
+  --fila-alt: #faf8f1;
+  --hover-fila: #eef3e8;
+  --shadow: 0 2px 8px rgba(60,74,46,.07);
   --radio: 12px;
 }}
 @media (prefers-color-scheme: dark) {{
   :root {{
-    --verde: #46b377;
-    --verde-osc: #8fd6ab;
-    --bg: #14181a;
-    --surface: #1e2427;
-    --border: #2c3438;
-    --text: #e8ede9;
-    --muted: #9aa39c;
-    --chip-bg: #26332c;
-    --chip-text: #cfe6d0;
+    --verde: #8fa06e;
+    --verde-osc: #b7c2a2;
+    --verde-accion: #5c9a55;
+    --verde-accion-h: #6faa66;
+    --bg: #17190f;
+    --surface: #20241a;
+    --border: #333827;
+    --text: #e8e6da;
+    --muted: #9c9885;
+    --chip-bg: #2b3020;
+    --chip-text: #cdd8bd;
+    --sec-bg: #3a4230;
+    --sec-bg-h: #47523a;
+    --neutro-bg: #2b2c22;
+    --neutro-bg-h: #34362a;
+    --fila-alt: #1f2216;
+    --hover-fila: #2a2f1e;
     --shadow: none;
   }}
 }}
 /* Toggle MANUAL de tema (#63): gana siempre al prefers-color-scheme del sistema. */
 :root[data-theme="dark"] {{
-  --verde: #46b377; --verde-osc: #8fd6ab; --bg: #14181a; --surface: #1e2427;
-  --border: #2c3438; --text: #e8ede9; --muted: #9aa39c; --chip-bg: #26332c;
-  --chip-text: #cfe6d0; --shadow: none;
+  --verde: #8fa06e; --verde-osc: #b7c2a2; --verde-accion: #5c9a55;
+  --verde-accion-h: #6faa66; --bg: #17190f; --surface: #20241a;
+  --border: #333827; --text: #e8e6da; --muted: #9c9885; --chip-bg: #2b3020;
+  --chip-text: #cdd8bd; --sec-bg: #3a4230; --sec-bg-h: #47523a;
+  --neutro-bg: #2b2c22; --neutro-bg-h: #34362a; --fila-alt: #1f2216;
+  --hover-fila: #2a2f1e; --shadow: none;
 }}
 :root[data-theme="light"] {{
-  --verde: {VERDE}; --verde-osc: {VERDE_OSCURO}; --bg: {CREMA}; --surface: #ffffff;
-  --border: #ece7dd; --text: {CARBON}; --muted: #7b8079; --chip-bg: #eef4ee;
-  --chip-text: {VERDE_OSCURO}; --shadow: 0 2px 8px rgba(30,60,40,.08);
+  --verde: {VERDE}; --verde-osc: {VERDE_OSCURO}; --verde-accion: {VERDE_ACCION};
+  --verde-accion-h: {VERDE_ACCION_HOVER}; --bg: {CREMA}; --surface: #ffffff;
+  --border: #eeead9; --text: {CARBON}; --muted: #8f8a75; --chip-bg: #eef1e6;
+  --chip-text: {VERDE_OSCURO}; --sec-bg: #dde4d0; --sec-bg-h: #c9d4b3;
+  --neutro-bg: #f1eee2; --neutro-bg-h: #e9e5d5; --fila-alt: #faf8f1;
+  --hover-fila: #eef3e8; --shadow: 0 2px 8px rgba(60,74,46,.07);
 }}
 """
 
