@@ -21,6 +21,12 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    # El contexto `secrets` NO se puede usar en un `if:` (GitHub lo rechaza al
+    # parsear el workflow -> falla en 0s). Se expone como env del job y el paso
+    # de firma comprueba `env.SIGNING_CERT_BASE64`, que sí es valido en `if`.
+    env:
+      SIGNING_CERT_BASE64: ${{ secrets.SIGNING_CERT_BASE64 }}
+      SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
