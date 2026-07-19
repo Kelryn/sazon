@@ -205,6 +205,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             return _pagina(
                 "Menú semanal",
                 aviso + '<div class="card">Todavía no hay ningún plan generado.</div>' + form_generar,
+                activa="menu",
             )
 
         n_sem = max(semanas)
@@ -228,9 +229,11 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 f'{html.escape(datos.get("motivo", ""))}. Amplía el corpus de recetas o relaja '
                 f"la regla de repetición.</p></div>"
             )
-            return _pagina("Menú semanal", cuerpo)
+            return _pagina("Menú semanal", cuerpo, activa="menu")
 
         botones_semana = (
+            '<a class="btn neu mini" href="/historial" style="margin-right:6px" '
+            'title="Ver planes anteriores">Historial</a>'
             f'<form method="post" action="/alternativa" style="display:inline">'
             f'<input type="hidden" name="semana" value="{semana}">'
             f'<button class="btn sec" type="submit">Generar alternativa</button></form>'
@@ -290,7 +293,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
             aviso + _banner_hoy(datos) + form_generar + plan_card + desayunos_card
             + _fila_nutrientes(datos, cfg) + cambio_card
         )
-        return _pagina("Menú semanal", cuerpo)
+        return _pagina("Menú semanal", cuerpo, activa="menu")
 
     @app.post("/generar")
     def generar(batchcooking: int = Form(0)):
@@ -692,7 +695,8 @@ function reescalarReceta() {{
             f"compraonline.alcampo.es para añadirlo al carrito. Las unidades se calculan según "
             f"el formato del paquete.</p></div>"
         )
-        return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None)
+        return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None,
+                       activa="compra")
 
     # --- Historial de planes y "repetir semana pasada" (#109) ---
     @app.get("/historial", response_class=HTMLResponse)
@@ -1294,7 +1298,16 @@ function reescalarReceta() {{
             + (f' <a class="btn mini" href="{base}&pagina={pagina+1}">▶</a>' if pagina < n_pags else "")
         )
         visor = (
-            f'<div class="card"><div class="franja">Ver y corregir el catálogo</div>'
+            '<div class="card">'
+            '<div class="franja" style="display:flex;justify-content:space-between;'
+            'align-items:center;gap:10px">'
+            '<span>Ver y corregir el catálogo</span>'
+            '<span style="display:flex;gap:8px">'
+            '<a class="btn neu mini" href="/buscar" style="min-width:96px" '
+            'title="Buscar recetas o productos">Buscar</a>'
+            '<a class="btn neu mini" href="/matching" style="min-width:96px" '
+            'title="Emparejar ingredientes sin producto">Correcciones</a>'
+            '</span></div>'
             f'<form method="get" action="/catalogo" style="margin-bottom:8px">'
             f'<input name="q" value="{html.escape(q)}" placeholder="Buscar producto…" '
             f'style="max-width:60%;display:inline-block;width:auto">'
@@ -1306,7 +1319,8 @@ function reescalarReceta() {{
         )
         aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
         return _pagina(
-            "Catálogo", aviso + actualizar_card + visor, refrescar=4 if activa else None
+            "Catálogo", aviso + actualizar_card + visor, refrescar=4 if activa else None,
+            activa="catalogo",
         )
 
     @app.get("/catalogo/validar", response_class=HTMLResponse)
@@ -1449,8 +1463,13 @@ function reescalarReceta() {{
             f'<input name="q" value="{html.escape(q)}" placeholder="Buscar receta por nombre…">'
             "</form>"
             f"<table>{filas or '<tr><td class=meta>Sin resultados.</td></tr>'}</table>"
-            f'<p class="meta">Mostrando {len(recetas)} recetas (las tuyas primero). Las del '
-            "catálogo (scrapeadas) solo se pueden ver; las tuyas se pueden editar.</p></div>"
+            '<div style="display:flex;justify-content:space-between;align-items:center;'
+            'gap:10px;margin-top:12px">'
+            f'<p class="meta" style="margin:0">Mostrando {len(recetas)} recetas (las tuyas '
+            "primero). Las del catálogo (scrapeadas) solo se pueden ver; las tuyas se pueden "
+            'editar.</p>'
+            '<a class="btn neu mini" href="/sustituciones" style="white-space:nowrap" '
+            'title="Sustitutos de cocina">Sustituciones</a></div></div>'
             '<div class="card"><div class="franja">Importar receta por URL</div>'
             '<form method="post" action="/recetas/importar" class="row">'
             '<div style="flex:3 1 320px"><input name="url" placeholder="https://…" '
@@ -1460,7 +1479,7 @@ function reescalarReceta() {{
             "(schema.org) — cientos de sitios soportados. Tras importar, empareja sus "
             "ingredientes con el catálogo (Correcciones) para que entre en el menú.</p></div>"
         )
-        return _pagina("Recetas", cuerpo)
+        return _pagina("Recetas", cuerpo, activa="recetas")
 
     @app.get("/recetas/nueva", response_class=HTMLResponse)
     def receta_nueva():
