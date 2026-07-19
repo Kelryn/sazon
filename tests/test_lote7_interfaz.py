@@ -33,6 +33,13 @@ def test_modo_ayuda_presente(client):
     assert 'class="ayuda"' in r.text  # panel de ayuda de la sección Menú
 
 
+def test_control_de_tema_en_configuracion(client):
+    """El cambio de tema vive ahora en Configuración → Apariencia (salió de la barra)."""
+    r = client.get("/config")
+    assert "ponerTema" in r.text
+    assert 'data-tema-btn="dark"' in r.text
+
+
 def test_buscador_global(client):
     r = client.get("/buscar")
     assert r.status_code == 200

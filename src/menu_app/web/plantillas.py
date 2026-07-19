@@ -105,6 +105,13 @@ th { color: var(--muted); font-weight: 700; font-size: 11px; text-transform: upp
 .btn.neu { background: var(--neutro-bg); color: #4a4636; }
 .btn.neu:hover { background: var(--neutro-bg-h); }
 .btn.mini { padding: 5px 11px; font-size: 12px; }
+/* Control segmentado (p. ej. tema Claro/Oscuro/Sistema): activo verde, resto apagado. */
+.seg { display: inline-flex; gap: 4px; background: var(--neutro-bg); padding: 4px; border-radius: 9px; }
+.seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
+  font-weight: 600; padding: 7px 16px; border-radius: 7px; cursor: pointer;
+  transition: background-color .15s, color .15s; }
+.seg button:hover { background: var(--sec-bg); color: var(--verde-osc); }
+.seg button.on, .seg button.on:hover { background: var(--verde-accion); color: #fff; }
 input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 8px; font: inherit; font-size: 13px; background: var(--bg); color: var(--text); }
 input:hover, input:focus, textarea:hover, textarea:focus, select:hover, select:focus {

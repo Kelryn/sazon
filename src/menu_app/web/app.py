@@ -1942,6 +1942,26 @@ function reescalarReceta() {{
             + '<p class="note">100% LOCAL: no se envía nada por red (Sazón no tiene servidor '
             "propio). Solo queda en tu equipo, por si necesitas revisar un fallo.</p></div>"
         )
+        # --- Apariencia (#63): tema claro/oscuro/sistema (movido aquí desde la barra) ---
+        cuerpo += (
+            '<div class="card"><div class="franja">Apariencia</div>'
+            "<label>Tema</label>"
+            '<div class="seg" role="group" aria-label="Tema de color">'
+            '<button type="button" data-tema-btn="light" onclick="ponerTema(\'light\')">Claro</button>'
+            '<button type="button" data-tema-btn="dark" onclick="ponerTema(\'dark\')">Oscuro</button>'
+            '<button type="button" data-tema-btn="system" onclick="ponerTema(null)">Sistema</button>'
+            "</div>"
+            "<script>"
+            "function ponerTema(t){var e=document.documentElement;"
+            'if(t){e.setAttribute("data-theme",t);localStorage.setItem("sazon-tema",t);}'
+            'else{e.removeAttribute("data-theme");localStorage.removeItem("sazon-tema");}'
+            "marcarTemaActivo();}"
+            'function marcarTemaActivo(){var t=localStorage.getItem("sazon-tema")||"system";'
+            'document.querySelectorAll("[data-tema-btn]").forEach(function(b){'
+            'b.classList.toggle("on",b.dataset.temaBtn===t);});}'
+            "marcarTemaActivo();"
+            "</script></div>"
+        )
         return _pagina("Configuración", cuerpo)
 
     @app.post("/config/perfil")
