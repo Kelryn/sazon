@@ -54,4 +54,5 @@ def test_cambiar_canal_actualiza_config(client):
     r = client.post("/config/canal", data={"canal": "beta"}, follow_redirects=True)
     assert r.status_code == 200
     r2 = client.get("/config")
-    assert 'value="beta" selected' in r2.text
+    # El canal es ahora un segmentado (.seg): el botón activo lleva class="on".
+    assert 'value="beta" class="on"' in r2.text
