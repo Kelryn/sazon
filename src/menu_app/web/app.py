@@ -568,128 +568,142 @@ function cambiarRaciones(d) {{
             return _pagina(
                 "Lista de la compra",
                 '<div class="card">No hay plan generado: genera primero el menú.</div>',
+                activa="compra",
             )
+        # Cambios de precio por producto (columna propia sin encabezado, spec):
+        # ↑ +N% rojo si subió; ↓ verde si está en oferta.
+        subida_por_rid = {a["retailer_product_id"]: a["subida_pct"] for a in subidas}
         filas = ""
         for pasillo, lineas in compra.por_pasillo().items():
-            subtotal = sum(linea.total for linea in lineas if linea.total is not None)
             perecedero = (
-                ' <span class="chip" title="Cómpralo lo último para minimizar desperdicio (#105)">'
+                '<span class="chip" title="Cómpralo lo último para minimizar desperdicio">'
                 "🧊 perecedero</span>"
                 if es_pasillo_perecedero(pasillo) else ""
             )
-            filas += (
-                f'<tr><td colspan="5" style="padding-top:10px"><b>🛒 {html.escape(pasillo)}</b>'
-                f'{perecedero} <span class="meta">({subtotal:.2f} €)</span></td></tr>'
-            )
-            for linea in lineas:
+            # Título de sección discreto, SIN subtotal, con el único separador debajo.
+            filas += f'<div class="lc-sec"><span>{html.escape(pasillo)}</span>{perecedero}</div>'
+            vacia = '<span class="celda-vacia">–</span>'
+            for i, linea in enumerate(lineas):
                 enlace = (
-                    f'<a class="receta" href="{html.escape(linea.url)}" target="_blank">'
-                    f"{html.escape(linea.nombre[:46])}</a>"
-                    if linea.url else html.escape(linea.nombre[:46])
+                    f'<a href="{html.escape(linea.url)}" target="_blank" '
+                    f'title="{html.escape(linea.nombre)}">{html.escape(linea.nombre[:52])}</a>'
+                    if linea.url else html.escape(linea.nombre[:52])
                 )
-                # Marcas de sustitucion por agotado (#53) y oferta (#57).
-                notas = ""
-                if linea.sustituido:
-                    notas += (
-                        '<br><span class="meta" title="Agotado: '
-                        f'{html.escape(linea.nombre_original or "")}">'
-                        "🔄 sustituido (agotado)</span>"
-                    )
-                if linea.en_oferta:
-                    notas += f'<br><span class="chip">🏷️ oferta · ahorras {linea.ahorro:.2f} €</span>'
-                precio = f"{linea.precio_unidad:.2f}" if linea.precio_unidad is not None else "—"
-                tot = f"{linea.total:.2f}" if linea.total is not None else "—"
-                # Lista MARCABLE (#66): checkbox persistida en localStorage (por plan +
-                # producto), para ir tachando mientras compras sin recargar la pagina.
+                marca_sust = (
+                    ' <span title="Agotado: sustituye a '
+                    f'{html.escape(linea.nombre_original or "")}" style="cursor:help">🔄</span>'
+                    if linea.sustituido else ""
+                )
+                sobra = vacia
+                if linea.formato_g_ml:
+                    exceso = linea.unidades * linea.formato_g_ml - linea.gramos_necesarios
+                    sobra = (
+                        f"{exceso / 1000:.1f} kg" if exceso >= 1000 else f"{exceso:.0f} g"
+                    ) if exceso > 0 else "0 g"
+                cambio = ""
+                pct = subida_por_rid.get(linea.producto_id)
+                if pct:
+                    cambio = f'<span class="lc-sube">↑ +{pct:.0f}%</span>'
+                elif linea.en_oferta and linea.precio_unidad:
+                    pct_baja = linea.ahorro / max(0.01, linea.total or 0.01) * 100
+                    cambio = f'<span class="lc-baja">↓ −{pct_baja:.0f}%</span>'
+                precio = f"{linea.precio_unidad:.2f}" if linea.precio_unidad is not None else vacia
+                tot = f"{linea.total:.2f}" if linea.total is not None else vacia
                 item_id = html.escape(f"{compra.plan_id or ''}:{linea.producto_id}")
+                # Lista MARCABLE (#66): checkbox persistida en localStorage.
                 filas += (
-                    f'<tr class="fila-compra" data-item="{item_id}">'
-                    f'<td><input type="checkbox" class="chk-comprado" '
-                    f'onchange="marcarComprado(this)" style="width:auto"></td>'
-                    f"<td>{linea.unidades}×</td><td>{enlace}"
-                    f'<br><span class="meta">necesitas {linea.cantidad_legible}</span>{notas}</td>'
-                    f'<td style="text-align:right">{precio}</td>'
-                    f'<td style="text-align:right"><b>{tot}</b></td></tr>'
+                    f'<div class="lc-fila {"a" if i % 2 == 0 else "b"}" data-item="{item_id}">'
+                    '<div><input type="checkbox" class="chk-comprado" '
+                    'onchange="marcarComprado(this)"></div>'
+                    f'<div class="nom">{enlace}{marca_sust}</div>'
+                    f'<div class="lc-c">{linea.unidades} ud</div>'
+                    f'<div class="lc-c">{linea.cantidad_legible}</div>'
+                    f'<div class="lc-c lc-sobra">{sobra}</div>'
+                    f'<div class="lc-c">{precio}</div>'
+                    f'<div class="lc-c">{cambio}</div>'
+                    f'<div class="lc-c"><b>{tot}</b></div></div>'
                 )
-        sin = ""
+        # Fila TOTAL: ahorro total en la columna del cambio de precio (spec).
+        ahorro_html = (
+            f'<span class="lc-baja">↓ −{compra.ahorro_total:.2f} €</span>'
+            if compra.ahorro_total > 0 else ""
+        )
+        filas += (
+            '<div class="lc-total-fila"><div></div><div>TOTAL</div><div></div><div></div>'
+            f'<div></div><div></div><div class="lc-c">{ahorro_html}</div>'
+            f'<div class="lc-c">{compra.total:.2f} €</div></div>'
+        )
+        notas = ""
         if compra.sin_producto:
             lista = ", ".join(html.escape(s) for s in compra.sin_producto[:20])
-            sin = (
-                f'<p class="meta">Sin producto asignado (cómpralos a tu criterio): {lista}'
-                + ("…" if len(compra.sin_producto) > 20 else "") + "</p>"
+            notas += (
+                '<p class="lc-nota"><b>Estos productos no se incluyen a la cesta:</b> '
+                f'{lista}{"…" if len(compra.sin_producto) > 20 else ""}</p>'
             )
         if compra.agotados_sin_sustituto:
             lista_ag = ", ".join(html.escape(s) for s in compra.agotados_sin_sustituto[:20])
-            sin += (
-                f'<p class="warn">⊘ Agotados sin alternativa en su categoría (cómpralos a tu '
-                f"criterio o cambia de producto): {lista_ag}</p>"
+            notas += (
+                '<p class="lc-nota"><span class="warn">⊘ Agotados sin alternativa</span> '
+                f"(cómpralos a tu criterio o cambia de producto): {lista_ag}</p>"
             )
-        if subidas:
-            lista_subidas = ", ".join(
-                f'{html.escape(a["nombre"])} ({a["precio_anterior"]:.2f}→{a["precio_actual"]:.2f} €, '
-                f'+{a["subida_pct"]:.0f}%)'
-                for a in subidas[:10]
-            )
-            sin += (
-                f'<p class="warn">📈 Subidas de precio recientes (#118): {lista_subidas}</p>'
-            )
-        ahorro_html = (
-            f' <span class="chip">🏷️ ahorras {compra.ahorro_total:.2f} € en ofertas</span>'
-            if compra.ahorro_total > 0 else ""
-        )
-        ticket = (
-            f'<div class="ticket"><h2>ALCAMPO</h2>'
-            f'<p class="cab">Lista de la compra · {compra.semanas} semana'
-            f"{'s' if compra.semanas != 1 else ''} de menús<br>"
-            f'<span class="meta">{html.escape(compra.plan_id or "")}</span></p>'
-            f"<table><tr><th></th><th>Uds</th><th>Producto</th>"
-            f'<th style="text-align:right">€/ud</th><th style="text-align:right">Total</th></tr>'
-            f"{filas}</table>"
-            f'<div class="total">TOTAL: {compra.total:.2f} €{ahorro_html}</div></div>'
-            + """<style>
-.fila-compra.comprado > td:not(:first-child) { opacity: .45; text-decoration: line-through; }
-</style>
-<script>
+        n_sem = f"{compra.semanas} semana{'s' if compra.semanas != 1 else ''} de menús"
+        tabla_compra = (
+            '<div class="card sin-pad">'
+            '<div class="franja" style="display:flex;justify-content:space-between;'
+            'align-items:center;margin:0;padding:13px 18px">'
+            f'<span>Lista de la compra</span><span class="meta">{n_sem}</span></div>'
+            '<div class="lc-head"><div></div><div>Producto</div>'
+            '<div class="lc-c">Compra</div><div class="lc-c">Necesita</div>'
+            '<div class="lc-c">Sobra</div><div class="lc-c">€/ud</div><div></div>'
+            '<div class="lc-c">Total</div></div>'
+            f"{filas}{notas}</div>"
+            + """<script>
 (function(){
   var clave = 'sazon-compra-marcada';
   var estado = JSON.parse(localStorage.getItem(clave) || '{}');
-  document.querySelectorAll('.fila-compra').forEach(function(tr){
-    var id = tr.dataset.item;
-    var chk = tr.querySelector('.chk-comprado');
-    if (estado[id]) { chk.checked = true; tr.classList.add('comprado'); }
+  document.querySelectorAll('.lc-fila').forEach(function(f){
+    var id = f.dataset.item;
+    var chk = f.querySelector('.chk-comprado');
+    if (chk && estado[id]) { chk.checked = true; f.classList.add('comprado'); }
   });
   window.marcarComprado = function(chk){
-    var tr = chk.closest('.fila-compra');
-    var id = tr.dataset.item;
+    var f = chk.closest('.lc-fila');
+    var id = f.dataset.item;
     var estado = JSON.parse(localStorage.getItem(clave) || '{}');
-    if (chk.checked) { estado[id] = true; tr.classList.add('comprado'); }
-    else { delete estado[id]; tr.classList.remove('comprado'); }
+    if (chk.checked) { estado[id] = true; f.classList.add('comprado'); }
+    else { delete estado[id]; f.classList.remove('comprado'); }
     localStorage.setItem(clave, JSON.stringify(estado));
   };
 })();
 </script>"""
         )
+        # Tarjeta Descargar (spec): 4 botones IGUALES (122×34), sin iconos, neutros.
         descargas = (
             '<div class="card"><div class="franja">Descargar</div>'
-            '<a class="btn" href="/compra.pdf">📄 Lista de compra (PDF)</a> '
-            '<a class="btn sec" href="/compra.csv">📊 Lista de compra (CSV)</a> '
-            '<a class="btn sec" href="/menu.pdf">📄 Menú (PDF)</a> '
-            '<a class="btn sec" href="/menu.csv">📊 Menú (CSV)</a></div>'
+            '<div style="display:flex;gap:14px;flex-wrap:wrap">'
+            '<a class="btn neu dl" href="/compra.pdf">Compra (PDF)</a>'
+            '<a class="btn neu dl" href="/compra.csv">Compra (CSV)</a>'
+            '<a class="btn neu dl" href="/menu.pdf">Menú (PDF)</a>'
+            '<a class="btn neu dl" href="/menu.csv">Menú (CSV)</a></div></div>'
         )
         # --- Enviar al carrito de Alcampo (en 2º plano) ---
         activa = _CARRITO["activa"]
         if activa:
             accion = '<p class="ok">⏳ Envío en marcha… inicia sesión en la ventana de Alcampo.</p>'
         else:
+            # Spec: dos casillas apiladas + botón verde "Enviar a Alcampo" (texto
+            # exacto); la explicación del proceso vive en el modo ayuda ❓.
             accion = (
                 '<form method="post" action="/carrito/enviar">'
-                '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px">'
-                '<input type="checkbox" name="sincronizar" value="1" style="width:auto"> '
+                '<label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;'
+                'font-weight:400;font-size:13px;color:var(--text)">'
+                '<input type="checkbox" name="sincronizar" value="1"> '
                 "Ajustar a la cantidad exacta si ya está en la cesta</label>"
-                '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px">'
-                '<input type="checkbox" name="vaciar_antes" value="1" style="width:auto"> '
-                "Vaciar la cesta antes de empezar</label><br>"
-                '<button class="btn" type="submit">🛒 Enviar la compra al carrito de Alcampo</button>'
+                '<label style="display:flex;align-items:center;gap:8px;margin:0 0 12px;'
+                'font-weight:400;font-size:13px;color:var(--text)">'
+                '<input type="checkbox" name="vaciar_antes" value="1"> '
+                "Vaciar la cesta antes de empezar</label>"
+                '<button class="btn" type="submit">Enviar a Alcampo</button>'
                 "</form>"
             )
         if _CARRITO["resumen"]:
@@ -697,13 +711,10 @@ function cambiarRaciones(d) {{
         log_txt = "\n".join(list(_CARRITO["log"])[-40:])
         log_html = f'<pre class="log">{html.escape(log_txt)}</pre>' if log_txt else ""
         carrito_card = (
-            '<div class="card"><div class="franja">🛒 Enviar al carrito de Alcampo</div>'
+            '<div class="card"><div class="franja">Enviar al carrito de Alcampo</div>'
             + accion
             + log_html
-            + '<p class="note">Abre Alcampo en tu navegador, inicias sesión TÚ (la app nunca '
-            "guarda tu contraseña) y añade automáticamente todos los productos a tu cesta, en "
-            "paralelo. Al terminar te deja en la cesta para elegir franja y pagar. Salta los "
-            "productos agotados.</p></div>"
+            + "</div>"
         )
         # Chromium bajo demanda (#78): solo se ofrece si Playwright esta pero el
         # navegador de respaldo NO (el flujo normal usa tu Chrome/Edge; esto es solo
@@ -732,16 +743,7 @@ function cambiarRaciones(d) {{
             )
 
         aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
-        cuerpo = (
-            aviso
-            + chromium_card
-            + descargas
-            + carrito_card
-            + f'<div class="card">{ticket}{sin}'
-            f'<p class="meta">Agrupada por pasillo. Cada producto enlaza a su página en '
-            f"compraonline.alcampo.es para añadirlo al carrito. Las unidades se calculan según "
-            f"el formato del paquete.</p></div>"
-        )
+        cuerpo = aviso + tabla_compra + descargas + carrito_card + chromium_card
         return _pagina("Lista de la compra", cuerpo, refrescar=5 if activa else None,
                        activa="compra")
 

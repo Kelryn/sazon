@@ -80,5 +80,7 @@ def test_compra_muestra_aviso_de_subida_de_precio(client):
 
     r = c.get("/compra")
     assert r.status_code == 200
-    assert "Subidas de precio recientes" in r.text
+    # Rediseño Lote 11: la subida se muestra por fila, en su columna (↑ +N% rojo).
+    assert 'class="lc-sube"' in r.text
+    assert "↑ +50%" in r.text  # 2.00 → 3.00
     assert "Cebolla dulce" in r.text

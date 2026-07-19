@@ -180,6 +180,49 @@ table.cat-tabla th { background: var(--thead-bg); color: var(--thead-texto);
 table.cat-tabla td { border-bottom: none; }
 table.cat-tabla tr:nth-child(odd) td { background: var(--fila-alt); }
 .apto-si { color: #4d7a3a; font-weight: 700; }
+/* Lista de la compra (spec Lote 11): tabla en grid con encabezado de color,
+   filas del mismo alto con hover de fila entera y columna de cambio de precio. */
+.lc-head, .lc-fila, .lc-total-fila { display: grid;
+  grid-template-columns: 34px 1fr 56px 66px 56px 52px 56px 60px; align-items: center;
+  padding: 0 18px; }
+.lc-head { background: #ece7d8; }
+.lc-head > div { font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+  color: #1c1c18; font-weight: 700; padding: 8px 0; }
+.lc-fila { height: 36px; font-size: 12px; color: var(--text);
+  transition: background-color .15s; }
+.lc-fila.a { background: #f7f4ea; }
+.lc-fila.b { background: #f2efe3; }
+.lc-fila:hover { background: #e6efdd; }
+.lc-fila a { color: var(--text); text-decoration: none; }
+.lc-fila .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-right: 8px; }
+.lc-c { text-align: center; }
+.lc-sobra { color: #8f8a75; }
+.lc-sube { color: var(--terracota); font-size: 11px; font-weight: 600; }
+.lc-baja { color: #4d7a3a; font-size: 11px; font-weight: 600; }
+.lc-sec { display: flex; align-items: center; gap: 8px; padding: 10px 18px 6px;
+  font-size: 12px; font-weight: 700; color: #9b9683;
+  border-bottom: 1px solid var(--border); }
+.lc-total-fila { border-top: 2px solid #2b2b26; font-weight: 800; font-size: 13px;
+  padding-top: 10px; padding-bottom: 10px; }
+.lc-nota { background: var(--nota-bg); border-top: 1px solid var(--neutro-bg);
+  padding: 10px 18px; font-size: 12px; color: var(--muted); margin: 0; }
+.lc-fila.comprado > div:not(:first-child) { opacity: .45; text-decoration: line-through; }
+.btn.dl { width: 122px; height: 34px; padding: 0; }
+:root[data-theme="dark"] .lc-head { background: var(--thead-bg); }
+:root[data-theme="dark"] .lc-head > div { color: var(--text); }
+:root[data-theme="dark"] .lc-fila.a { background: var(--fila-alt); }
+:root[data-theme="dark"] .lc-fila.b { background: var(--neutro-bg); }
+:root[data-theme="dark"] .lc-fila:hover { background: var(--hover-fila); }
+:root[data-theme="dark"] .lc-total-fila { border-top-color: var(--text); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .lc-head { background: var(--thead-bg); }
+  :root:not([data-theme="light"]) .lc-head > div { color: var(--text); }
+  :root:not([data-theme="light"]) .lc-fila.a { background: var(--fila-alt); }
+  :root:not([data-theme="light"]) .lc-fila.b { background: var(--neutro-bg); }
+  :root:not([data-theme="light"]) .lc-fila:hover { background: var(--hover-fila); }
+  :root:not([data-theme="light"]) .lc-total-fila { border-top-color: var(--text); }
+}
 /* Detalle de receta (spec Lote 11). */
 .titulo-receta { font-size: 22px; font-weight: 700; color: var(--text); text-decoration: none; }
 a.titulo-receta:hover { color: var(--verde); }
@@ -382,8 +425,15 @@ AYUDA_SECCION = {
         "ingredientes y precios de Alcampo."
     ),
     "compra": (
-        "<b>Lista de la compra.</b> Reúne todos los productos del menú de la semana con sus "
-        "precios de Alcampo, agrupados como un recibo. Puedes exportarla e imprimirla."
+        "<b>Lista de la compra.</b> Todos los productos del plan, agrupados por pasillo de "
+        "Alcampo (los perecederos al final, para comprarlos lo último). Cada producto enlaza "
+        "a su página en compraonline.alcampo.es; las unidades se calculan según el formato "
+        "del paquete y «Sobra» es lo que te quedará sin usar. La flecha junto al precio "
+        "avisa de subidas (↑ rojo) u ofertas (↓ verde). Marca la casilla para ir tachando "
+        "mientras compras (se recuerda en este equipo). «Enviar a Alcampo» abre Alcampo en "
+        "tu navegador, inicias sesión TÚ (la app nunca guarda tu contraseña) y añade los "
+        "productos a la cesta; al terminar te deja en la cesta para elegir franja y pagar. "
+        "Salta los agotados."
     ),
     "recetas": (
         "<b>Recetas.</b> Todas las recetas disponibles: las tuyas (editables) y las del "
