@@ -173,6 +173,45 @@ button.card-plegar:hover .chev { color: #5b5748; }
   transition: background-color .15s, color .15s; }
 .seg button:hover { background: var(--sec-bg); color: var(--verde-osc); }
 .seg button.on, .seg button.on:hover { background: var(--verde-accion); color: #fff; }
+/* Filas-enlace clicables a todo el ancho de la tarjeta (listas: recetas, buscar…). */
+.filas-full { margin: 0 -18px; }
+a.fila-link { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 10px;
+  padding: 9px 18px 9px 30px; text-decoration: none; font-size: 13px; color: var(--verde-osc);
+  transition: background-color .15s; }
+a.fila-link:hover { background: var(--hover-fila); }
+a.fila-link .fl-tag { font-size: 11px; color: var(--muted); text-align: center; }
+a.fila-link.flex { display: flex; justify-content: space-between; padding-left: 18px; }
+a.fila-link .lado { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.pie-nota { color: #bdb8a8; font-size: 12px; margin: 0; }
+/* Tabla con encabezado gris (historial, catalogo, copias de seguridad). */
+.h-head, a.h-row { display: grid; grid-template-columns: 1fr 82px 104px 104px; gap: 8px;
+  margin: 0 -18px; padding: 8px 18px; align-items: center; }
+.h-head { background: var(--thead-bg); border-bottom: 1px solid var(--thead-borde); }
+.h-head > div { font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+  color: var(--thead-texto); font-weight: 700; }
+.h-head .c, a.h-row .c { text-align: center; }
+a.h-row { font-size: 13px; color: var(--verde-osc); text-decoration: none;
+  transition: background-color .15s; }
+a.h-row:nth-of-type(even) { background: var(--fila-alt); }
+a.h-row:hover, a.h-row:nth-of-type(even):hover { background: var(--hover-fila); }
+/* Zona de arrastrar y soltar (importar planes). */
+.dz { display: flex; align-items: center; gap: 14px; border: 1.5px dashed #cdd8bd;
+  border-radius: 12px; padding: 16px 18px; background: var(--bg); cursor: pointer;
+  transition: border-color .15s, background-color .15s; }
+.dz:hover, .dz.drag { border-color: var(--verde); background: var(--hover-fila); }
+.dz .circ { width: 42px; height: 42px; flex: none; border-radius: 50%;
+  background: var(--hover-fila); display: flex; align-items: center; justify-content: center;
+  color: var(--verde); font-size: 17px; }
+.dz .t1 { font-size: 13px; color: var(--verde-osc); font-weight: 600; }
+.dz .t2 { font-size: 12px; color: #a8a08a; }
+/* Filas de alternativa numeradas (sustituciones). */
+.alt-fila { display: flex; align-items: center; gap: 10px; margin: 0 -18px; padding: 11px 18px;
+  font-size: 13px; color: var(--text); cursor: pointer; transition: background-color .15s; }
+.alt-fila:hover { background: var(--hover-fila); }
+.alt-fila .n { width: 22px; height: 22px; flex: none; border-radius: 50%;
+  background: var(--hover-fila); color: var(--verde); font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; }
+.alt-fila:hover .n { background: #dbe7cf; }
 input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 8px; font: inherit; font-size: 13px; background: var(--bg); color: var(--text); }
 input:hover, input:focus, textarea:hover, textarea:focus, select:hover, select:focus {
@@ -256,18 +295,41 @@ AYUDA_SECCION = {
         "sustitutos de cocina con «Sustituciones»."
     ),
     "catalogo": (
-        "<b>Catálogo.</b> Los productos de Alcampo en la base de datos. Actualízalo por "
-        "categorías, corrige datos de un producto, empareja ingredientes sin producto "
-        "(«Correcciones») o busca en todo («Buscar»)."
+        "<b>Catálogo.</b> Los productos de Alcampo en la base de datos. «Actualizar» "
+        "refresca precios y productos de las categorías marcadas (tarda unos minutos y usa "
+        "la web de Alcampo); «Revisar» lista datos anómalos detectados. Corrige un producto "
+        "con «Editar», empareja ingredientes sin producto («Correcciones») o busca en todo "
+        "(«Buscar»)."
+    ),
+    "sustituciones": (
+        "<b>Sustituciones.</b> Sustituciones de cocina habituales para cuando te falta un "
+        "ingrediente (p. ej. mantequilla → aceite). No son productos del catálogo: para "
+        "emparejar ingredientes con productos de Alcampo ya está «Correcciones»."
+    ),
+    "historial": (
+        "<b>Historial.</b> Todos los planes de menú generados. Pulsa uno para ver sus "
+        "semanas: los planes antiguos son de solo lectura, pero «Repetir esta semana» "
+        "añade esa semana al final del plan actual. Puedes exportar un plan a .json para "
+        "compartirlo e importar el de otra persona arrastrándolo a la zona de "
+        "«Compartir menús»."
+    ),
+    "buscar": (
+        "<b>Buscar.</b> Búsqueda global: recetas por título y productos del catálogo por "
+        "nombre. Pulsa una receta para abrir su ficha, o un producto para ver y corregir "
+        "sus datos."
     ),
 }
 
 
-def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None, activa: str = "") -> str:
+def _pagina(
+    titulo: str, cuerpo: str, refrescar: int | None = None, activa: str = "", ayuda: str = ""
+) -> str:
     """Envuelve el cuerpo en la plantilla base (barra de herramientas + tema).
 
     `activa` marca la sección de la barra (menu/compra/recetas/catalogo) para
-    pintar la barrita mostaza bajo el botón activo.
+    pintar la barrita mostaza bajo el botón activo. `ayuda` elige el texto del
+    modo ayuda ❓ cuando la pantalla no coincide con su sección de barra (p. ej.
+    Sustituciones vive bajo Recetas pero tiene su propia ayuda).
     """
     meta = f'<meta http-equiv="refresh" content="{refrescar}">' if refrescar else ""
 
@@ -289,8 +351,8 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None, activa: str 
         ' onclick="document.body.classList.toggle(\'ayuda-on\')">?</button>'
         "</header>"
     )
-    ayuda = AYUDA_SECCION.get(activa, "")
-    panel_ayuda = f'<div class="ayuda">{ayuda}</div>' if ayuda else ""
+    texto_ayuda = AYUDA_SECCION.get(ayuda or activa, "")
+    panel_ayuda = f'<div class="ayuda">{texto_ayuda}</div>' if texto_ayuda else ""
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{meta}
 <link rel="icon" href="{favicon_data_uri()}">

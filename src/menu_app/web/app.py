@@ -719,28 +719,49 @@ function reescalarReceta() {{
         finally:
             conn.close()
         aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
-        if not planes:
-            return _pagina("Historial de menús", aviso + '<div class="card">Todavía no hay planes generados.</div>')
-        filas = "".join(
-            f'<tr><td>{html.escape(p["creado"])}</td>'
-            f'<td>{p["n_semanas"]}</td><td>{p["coste_total"]:.2f} €</td>'
-            f'<td><a class="receta" href="/historial/{html.escape(p["plan_id"])}">Ver semanas</a></td></tr>'
-            for p in planes
-        )
+        # Zona de arrastrar y soltar (spec, opción C) para importar un plan .json.
         importar = (
-            '<div class="card"><div class="franja">Compartir menús (#114)</div>'
-            '<form method="post" action="/historial/importar" enctype="multipart/form-data">'
-            '<label>Importar un plan (.json exportado desde "Ver semanas")</label>'
-            '<input type="file" name="fichero" accept="application/json" required>'
-            '<div style="margin-top:10px"><button class="btn" type="submit">Importar</button></div>'
-            "</form></div>"
+            '<div class="card"><div class="franja">Compartir menús</div>'
+            '<form id="f-importar" method="post" action="/historial/importar" '
+            'enctype="multipart/form-data">'
+            '<input type="file" name="fichero" accept="application/json" required '
+            'style="display:none" onchange="this.form.submit()">'
+            '<div class="dz" onclick="this.parentElement.querySelector(\'input\').click()">'
+            '<div class="circ">⬆</div>'
+            '<div><div class="t1">Arrastra tu archivo .json aquí</div>'
+            '<div class="t2">o haz clic para seleccionarlo</div></div></div>'
+            "</form>"
+            "<script>(function(){var f=document.getElementById('f-importar');"
+            "var z=f.querySelector('.dz');var inp=f.querySelector('input');"
+            "['dragenter','dragover'].forEach(function(e){z.addEventListener(e,function(ev){"
+            "ev.preventDefault();z.classList.add('drag');});});"
+            "['dragleave','drop'].forEach(function(e){z.addEventListener(e,function(ev){"
+            "ev.preventDefault();z.classList.remove('drag');});});"
+            "z.addEventListener('drop',function(ev){if(ev.dataTransfer.files.length){"
+            "inp.files=ev.dataTransfer.files;f.submit();}});})();</script></div>"
+        )
+        if not planes:
+            return _pagina(
+                "Historial de menús",
+                aviso + '<div class="card">Todavía no hay planes generados.</div>' + importar,
+                activa="menu", ayuda="historial",
+            )
+        # Tabla de planes: filas clicables enteras (spec) con Coste/semana.
+        filas = "".join(
+            f'<a class="h-row" href="/historial/{html.escape(p["plan_id"])}">'
+            f'<div>{html.escape(p["creado"])}</div>'
+            f'<div class="c">{p["n_semanas"]}</div>'
+            f'<div class="c">{p["coste_total"] / max(1, p["n_semanas"]):.2f} €</div>'
+            f'<div class="c">{p["coste_total"]:.2f} €</div></a>'
+            for p in planes
         )
         cuerpo = aviso + (
             '<div class="card"><div class="franja">Planes generados</div>'
-            "<table><tr><th>Fecha</th><th>Semanas</th><th>Coste total</th><th></th></tr>"
-            f"{filas}</table></div>"
+            '<div class="h-head"><div>Fecha</div><div class="c">Semanas</div>'
+            '<div class="c">Coste/semana</div><div class="c">Coste total</div></div>'
+            f"{filas}</div>"
         ) + importar
-        return _pagina("Historial de menús", cuerpo)
+        return _pagina("Historial de menús", cuerpo, activa="menu", ayuda="historial")
 
     @app.get("/historial/{plan_id}", response_class=HTMLResponse)
     def historial_plan_page(plan_id: str, msg: str = ""):
@@ -751,7 +772,10 @@ function reescalarReceta() {{
         finally:
             conn.close()
         if not semanas:
-            return _pagina("Historial de menús", '<div class="card">Ese plan no existe.</div>')
+            return _pagina(
+                "Historial de menús", '<div class="card">Ese plan no existe.</div>',
+                activa="menu", ayuda="historial",
+            )
         aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
         es_actual = plan_id == plan_actual_id
         filas = ""
@@ -760,24 +784,31 @@ function reescalarReceta() {{
                 f'<form method="post" action="/repetir-semana" style="display:inline">'
                 f'<input type="hidden" name="origen_plan_id" value="{html.escape(plan_id)}">'
                 f'<input type="hidden" name="origen_semana" value="{semana}">'
-                f'<button class="btn mini" type="submit">Repetir esta semana</button></form>'
+                f'<button class="btn sec mini" type="submit">Repetir esta semana</button></form>'
             )
-            tabla = _tabla_dias(datos) if datos.get("factible") else '<p class="meta">Sin menú factible.</p>'
+            tabla = (
+                _tabla_dias(datos) if datos.get("factible")
+                else '<p class="meta" style="margin:8px 18px">Sin menú factible.</p>'
+            )
             filas += (
-                f'<div class="card"><div class="franja">Semana {semana} '
-                f'<span style="float:right">{repetir}</span></div>{tabla}'
-                f'<p class="meta">Coste: {datos.get("coste_total", 0):.2f} €</p></div>'
+                '<div class="card sin-pad">'
+                '<div class="franja" style="display:flex;justify-content:space-between;'
+                f'align-items:center;margin:0;padding:13px 18px">'
+                f"<span>Semana {semana}</span>{repetir}</div>"
+                f"{tabla}"
+                '<div class="tabla-pie" style="padding-top:0">'
+                f'<p class="meta" style="margin:0">Coste: '
+                f'{datos.get("coste_total", 0):.2f} €</p></div></div>'
             )
-        nota = (
-            '<p class="note">Este es el plan actual.</p>' if es_actual else
-            '<p class="note">Plan anterior (solo lectura). "Repetir esta semana" la añade '
-            "como una semana nueva al final del plan actual.</p>"
-        )
+        # La nota de solo-lectura vive en el modo ayuda ❓ (spec).
         exportar = (
-            f'<p><a class="receta" href="/historial/{html.escape(plan_id)}/exportar.json">'
-            "⬇️ Exportar este plan (.json, para compartirlo)</a></p>"
+            '<div style="margin-bottom:14px">'
+            f'<a class="btn neu mini" href="/historial/{html.escape(plan_id)}/exportar.json">'
+            "Exportar este plan (.json)</a></div>"
         )
-        return _pagina(f"Plan {plan_id}", aviso + nota + exportar + filas)
+        return _pagina(
+            f"Plan {plan_id}", aviso + exportar + filas, activa="menu", ayuda="historial"
+        )
 
     @app.get("/historial/{plan_id}/exportar.json")
     def historial_exportar(plan_id: str):
@@ -906,14 +937,16 @@ function reescalarReceta() {{
     @app.get("/buscar", response_class=HTMLResponse)
     def buscar_page(q: str = ""):
         q = q.strip()
+        form_buscar = (
+            '<div class="card"><div class="franja">Buscar</div>'
+            '<form method="get" action="/buscar" style="display:flex;gap:10px;'
+            'align-items:center;flex-wrap:wrap">'
+            f'<input name="q" value="{html.escape(q)}" autofocus '
+            'placeholder="Buscar recetas o productos…" style="flex:1;min-width:220px">'
+            '<button class="btn sec" type="submit">Buscar</button></form></div>'
+        )
         if not q:
-            return _pagina(
-                "Buscar",
-                '<div class="card"><form method="get" action="/buscar">'
-                '<input name="q" placeholder="Buscar recetas o productos…" autofocus '
-                'style="width:100%;max-width:420px">'
-                ' <button class="btn" type="submit">Buscar</button></form></div>',
-            )
+            return _pagina("Buscar", form_buscar, activa="catalogo", ayuda="buscar")
         conn, _ = _conn()
         try:
             like = f"%{q.lower()}%"
@@ -927,61 +960,73 @@ function reescalarReceta() {{
             ).fetchall()
         finally:
             conn.close()
+        # Filas clicables enteras con hover (spec): receta -> ficha; producto -> editor.
         filas_r = "".join(
-            f'<tr><td><a class="receta" href="/receta/{html.escape(r["id"])}">'
-            f'{html.escape(r["titulo"])}</a></td><td class="meta">{html.escape(r["fuente"] or "")}</td></tr>'
+            f'<a class="fila-link flex" href="/receta/{html.escape(r["id"])}">'
+            f"<span>{html.escape(r['titulo'])}</span>"
+            f'<span class="lado">{html.escape(r["fuente"] or "")}</span></a>'
             for r in recetas
-        ) or '<tr><td colspan="2" class="meta">Sin recetas.</td></tr>'
+        ) or '<p class="meta" style="margin:8px 18px">Sin recetas.</p>'
+
         def _fila_producto(p):
-            precio = f'{p["precio_eur"]:.2f} €' if p["precio_eur"] is not None else "—"
+            precio = f'{p["precio_eur"]:.2f} €' if p["precio_eur"] is not None else "–"
             return (
-                f'<tr><td>{html.escape(p["nombre"])}</td>'
-                f'<td style="text-align:right">{precio}</td></tr>'
+                f'<a class="fila-link flex" '
+                f'href="/catalogo/{html.escape(p["retailer_product_id"])}">'
+                f"<span>{html.escape(p['nombre'])}</span>"
+                f'<span class="lado">{precio}</span></a>'
             )
 
         filas_p = "".join(_fila_producto(p) for p in productos) or (
-            '<tr><td colspan="2" class="meta">Sin productos.</td></tr>'
+            '<p class="meta" style="margin:8px 18px">Sin productos.</p>'
         )
         cuerpo = (
-            '<div class="card"><form method="get" action="/buscar">'
-            f'<input name="q" value="{html.escape(q)}" style="width:100%;max-width:420px">'
-            ' <button class="btn" type="submit">Buscar</button></form></div>'
-            f'<div class="card"><div class="franja">Recetas ({len(recetas)})</div>'
-            f"<table>{filas_r}</table></div>"
+            form_buscar
+            + f'<div class="card"><div class="franja">Recetas ({len(recetas)})</div>'
+            f'<div class="filas-full">{filas_r}</div></div>'
             f'<div class="card"><div class="franja">Productos del catálogo ({len(productos)})</div>'
-            f"<table>{filas_p}</table></div>"
+            f'<div class="filas-full">{filas_p}</div></div>'
         )
-        return _pagina(f"Buscar «{q}»", cuerpo)
+        return _pagina(f"Buscar «{q}»", cuerpo, activa="catalogo", ayuda="buscar")
 
     # --- Asistente de sustituciones de cocina (#100) ---
     @app.get("/sustituciones", response_class=HTMLResponse)
     def sustituciones_page(q: str = ""):
         q = q.strip()
+        # La nota "son sustituciones de cocina, no productos…" vive en el modo ayuda ❓.
         form = (
-            '<div class="card"><form method="get" action="/sustituciones">'
+            '<div class="card"><div class="franja">Sustituciones</div>'
+            '<form method="get" action="/sustituciones" style="display:flex;gap:10px;'
+            'align-items:center;flex-wrap:wrap">'
             f'<input name="q" value="{html.escape(q)}" autofocus placeholder='
-            '"¿Qué ingrediente te falta? (p.ej. nata, huevo, mantequilla)" '
-            'style="width:100%;max-width:420px">'
-            ' <button class="btn" type="submit">Buscar</button></form>'
-            '<p class="note">Sustituciones de cocina habituales, no productos del catálogo: '
-            "para eso ya está el matching de recetas.</p></div>"
+            '"¿Qué ingrediente te falta? (p. ej. nata, huevo, mantequilla)" '
+            'style="flex:1;min-width:220px">'
+            '<button class="btn sec" type="submit">Buscar</button></form></div>'
         )
         if not q:
-            return _pagina("Sustituciones", form)
+            return _pagina("Sustituciones", form, activa="recetas", ayuda="sustituciones")
         resultado = buscar_sustitutos(q)
         if not resultado:
             cuerpo = form + (
                 f'<div class="card"><p class="meta">No tengo sustituciones para «{html.escape(q)}» '
                 "todavía.</p></div>"
             )
-            return _pagina(f"Sustituciones para «{q}»", cuerpo)
+            return _pagina(
+                f"Sustituciones para «{q}»", cuerpo, activa="recetas", ayuda="sustituciones"
+            )
         clave, alternativas = resultado
-        filas = "".join(f"<li>{html.escape(a)}</li>" for a in alternativas)
+        # Filas a todo el ancho con número en círculo y hover de fondo (spec).
+        filas = "".join(
+            f'<div class="alt-fila"><span class="n">{i}</span> {html.escape(a)}</div>'
+            for i, a in enumerate(alternativas, start=1)
+        )
         cuerpo = form + (
             f'<div class="card"><div class="franja">En vez de «{html.escape(clave)}», prueba:</div>'
-            f"<ul>{filas}</ul></div>"
+            f'<div class="filas-full">{filas}</div></div>'
         )
-        return _pagina(f"Sustituciones para «{q}»", cuerpo)
+        return _pagina(
+            f"Sustituciones para «{q}»", cuerpo, activa="recetas", ayuda="sustituciones"
+        )
 
     # --- Cola de correcciones de matching (#13/#14): asignar producto a mano ---
     @app.get("/matching", response_class=HTMLResponse)
@@ -1453,40 +1498,42 @@ function reescalarReceta() {{
         finally:
             conn.close()
         aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        # Filas clicables enteras (spec): sin botones Ver/Editar; la etiqueta
+        # propia/catálogo va en columna propia, centrada.
         filas = ""
+        n_propias = 0
         for r in recetas:
             fav = ' <span class="fav">★</span>' if r["es_favorita"] else ""
-            etiqueta = "✏️ propia" if r["editable"] else "catálogo"
-            acciones = (
-                f'<a class="btn mini" href="/recetas/{html.escape(r["id"])}/editar">Editar</a> '
-                if r["editable"]
-                else '<a class="btn mini sec" href="/receta/{}">Ver</a> '.format(html.escape(r["id"]))
-            )
+            if r["editable"]:
+                n_propias += 1
+            etiqueta = "propia" if r["editable"] else "catálogo"
             filas += (
-                f'<tr><td><a class="receta" href="/receta/{html.escape(r["id"])}">'
-                f'{html.escape(r["titulo"])}</a>{fav} <span class="meta">[{etiqueta}]</span></td>'
-                f'<td style="text-align:right;white-space:nowrap">{acciones}</td></tr>'
+                f'<a class="fila-link" href="/receta/{html.escape(r["id"])}">'
+                f"<span>{html.escape(r['titulo'])}{fav}</span>"
+                f'<span class="fl-tag">{etiqueta}</span></a>'
             )
         cuerpo = (
             aviso
-            + '<div class="card"><div class="franja">Recetas '
-            f'<a class="btn" style="float:right" href="/recetas/nueva">+ Nueva receta</a></div>'
-            '<form method="get" action="/recetas" style="margin-bottom:10px">'
+            + '<div class="card"><div class="franja" style="display:flex;'
+            'justify-content:space-between;align-items:center">'
+            "<span>Recetas</span>"
+            '<a class="btn sec mini" href="/recetas/nueva">Nueva receta</a></div>'
+            '<form method="get" action="/recetas" style="margin-bottom:4px">'
             f'<input name="q" value="{html.escape(q)}" placeholder="Buscar receta por nombre…">'
             "</form>"
-            f"<table>{filas or '<tr><td class=meta>Sin resultados.</td></tr>'}</table>"
+            f'<div class="filas-full">'
+            f'{filas or "<p class=meta style=margin:8px_18px>Sin resultados.</p>"}</div>'
             '<div style="display:flex;justify-content:space-between;align-items:center;'
             'gap:10px;margin-top:12px">'
-            f'<p class="meta" style="margin:0">Mostrando {len(recetas)} recetas (las tuyas '
-            "primero). Las del catálogo (scrapeadas) solo se pueden ver; las tuyas se pueden "
-            'editar.</p>'
+            f'<p class="pie-nota">Mostrando {len(recetas)} recetas. '
+            f"{len(recetas) - n_propias} del catálogo y {n_propias} personales.</p>"
             '<a class="btn neu mini" href="/sustituciones" style="white-space:nowrap" '
             'title="Sustitutos de cocina">Sustituciones</a></div></div>'
             '<div class="card"><div class="franja">Importar receta por URL</div>'
             '<form method="post" action="/recetas/importar" class="row">'
             '<div style="flex:3 1 320px"><input name="url" placeholder="https://…" '
             'style="width:100%"></div>'
-            '<div><button class="btn" type="submit">Importar</button></div></form>'
+            '<div><button class="btn sec" type="submit">Importar</button></div></form>'
             '<p class="note">Funciona con webs de recetas que publican datos estructurados '
             "(schema.org) — cientos de sitios soportados. Tras importar, empareja sus "
             "ingredientes con el catálogo (Correcciones) para que entre en el menú.</p></div>"

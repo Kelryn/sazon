@@ -48,7 +48,9 @@ def test_historial_muestra_planes_generados(client):
     c.post("/generar", data={}, follow_redirects=True)
     r = c.get("/historial")
     assert r.status_code == 200
-    assert "Ver semanas" in r.text
+    # Rediseño Lote 11: la fila del plan es clicable entera y hay Coste/semana.
+    assert 'class="h-row"' in r.text
+    assert "Coste/semana" in r.text
 
 
 def test_repetir_semana_anade_una_semana_nueva(client):

@@ -57,6 +57,9 @@ TOKENS_CSS = f"""
   --plegar-h: #f8f6ee;
   --flecha-h: #f1eee0;
   --ico-bg: #f3f1e8;
+  --thead-bg: #f2f0ea;
+  --thead-borde: #e4e0d2;
+  --thead-texto: #6b6754;
   --shadow: 0 2px 8px rgba(60,74,46,.07);
   --radio: 12px;
 }}
@@ -90,6 +93,9 @@ TOKENS_CSS = f"""
     --plegar-h: #2a2f1e;
     --flecha-h: #2a2f1e;
     --ico-bg: #2b2c22;
+    --thead-bg: #2b2c22;
+    --thead-borde: #3a3b2e;
+    --thead-texto: #9c9885;
     --shadow: none;
   }}
 }}
@@ -105,7 +111,9 @@ TOKENS_CSS = f"""
   --tinte-dia: #22251a; --tinte-com: #262316; --tinte-cen: #242028;
   --tinte-com-h: #322d1c; --tinte-cen-h: #302a35; --fila-nutri: #1f2216;
   --nota-bg: #2b2c22; --plegar-h: #2a2f1e; --flecha-h: #2a2f1e;
-  --ico-bg: #2b2c22; --shadow: none;
+  --ico-bg: #2b2c22;
+  --thead-bg: #2b2c22; --thead-borde: #3a3b2e; --thead-texto: #9c9885;
+  --shadow: none;
 }}
 :root[data-theme="light"] {{
   --barra: {VERDE};
@@ -118,7 +126,9 @@ TOKENS_CSS = f"""
   --tinte-dia: #faf9f3; --tinte-com: #fdf9f0; --tinte-cen: #faf8fb;
   --tinte-com-h: #f8f0dd; --tinte-cen-h: #f2ecf4; --fila-nutri: #fbfaf6;
   --nota-bg: #f6f4ec; --plegar-h: #f8f6ee; --flecha-h: #f1eee0;
-  --ico-bg: #f3f1e8; --shadow: 0 2px 8px rgba(60,74,46,.07);
+  --ico-bg: #f3f1e8;
+  --thead-bg: #f2f0ea; --thead-borde: #e4e0d2; --thead-texto: #6b6754;
+  --shadow: 0 2px 8px rgba(60,74,46,.07);
 }}
 """
 
