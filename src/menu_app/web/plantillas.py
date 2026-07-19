@@ -80,6 +80,14 @@ main { max-width: 760px; margin: 0 auto; padding: 14px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid #f1eee2; vertical-align: middle; }
 th { color: var(--muted); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+/* Tabla del menu semanal: cabeceras con subrayado de color por comida + hover de fila. */
+.menu-tabla th { text-align: center; padding-bottom: 7px; border-bottom: 2px solid transparent; }
+.menu-tabla th.h-dia { border-bottom-color: var(--text); }
+.menu-tabla th.h-comida { border-bottom-color: var(--dorado); }
+.menu-tabla th.h-cena { border-bottom-color: #8a6f9c; }
+.menu-tabla td { text-align: center; vertical-align: middle; }
+.menu-tabla td.c-dia { text-align: left; }
+.menu-tabla tr.d:hover td { background: var(--hover-fila); }
 .ok { color: var(--verde-accion); } .warn { color: var(--terracota); font-weight: 600; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   background: var(--verde-accion); color: #fff; border: 0; padding: 9px 16px; border-radius: 7px;
@@ -307,10 +315,15 @@ def _tabla_dias(datos: dict) -> str:
     for dia, comida, cena, es_bc in asignar_dias(datos, DIAS_SEMANA):
         etiqueta = ' <span class="meta">🍱 plato único</span>' if es_bc else ""
         filas += (
-            f"<tr><td><b>{_NOMBRE_DIA.get(dia, dia)}</b>{etiqueta}</td>"
+            f'<tr class="d"><td class="c-dia"><b>{_NOMBRE_DIA.get(dia, dia)}</b>{etiqueta}</td>'
             f"<td>{_t(comida)}</td><td>{_t(cena)}</td></tr>"
         )
-    tabla = f"<table><tr><th>Día</th><th>🌞 Comida</th><th>🌙 Cena</th></tr>{filas}</table>"
+    tabla = (
+        '<table class="menu-tabla"><tr>'
+        '<th class="h-dia">Día</th><th class="h-comida">🌞 Comida</th>'
+        '<th class="h-cena">🌙 Cena</th>'
+        f"</tr>{filas}</table>"
+    )
     return tabla + _resumen_grupos(datos)
 
 
