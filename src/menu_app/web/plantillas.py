@@ -48,44 +48,76 @@ _ESTILO = (
 * { box-sizing: border-box; }
 body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0;
   background: var(--bg); color: var(--text); }
-header { background: linear-gradient(100deg, var(--verde-osc), var(--verde)); color: #fff;
-  padding: 12px 20px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  box-shadow: 0 2px 10px rgba(30,60,40,.15); }
-header .logo { height: 34px; }
-header nav { display: flex; gap: 16px; flex-wrap: wrap; }
-header a { color: rgba(255,255,255,.92); text-decoration: none; font-weight: 600; font-size: 14px; }
-header a:hover { color: #fff; text-decoration: underline; }
-main { max-width: 980px; margin: 0 auto; padding: 22px 20px; }
-.card { background: var(--surface); border-radius: var(--radio); padding: 18px 20px;
-  margin-bottom: 18px; box-shadow: var(--shadow); border: 1px solid var(--border); }
-.franja { font-weight: 700; color: var(--verde-osc); margin: 12px 0 6px; font-size: 15px; }
+/* --- Barra de herramientas (Lote 11): fija; Menu/Compra/Recetas/Catalogo + logo + config + ayuda --- */
+header { position: sticky; top: 0; z-index: 20; background: var(--verde); color: #fff;
+  padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+header .mainnav { display: flex; gap: 6px; }
+header .mainnav a { position: relative; color: #fff; text-decoration: none; font-weight: 700;
+  font-size: 13px; padding: 7px 12px; border-radius: 7px; transition: background-color .15s; }
+header .mainnav a.n-menu:hover { background: #5a6e43; }
+header .mainnav a.n-compra:hover { background: #6b6539; }
+header .mainnav a.n-recetas:hover { background: #4f6a58; }
+header .mainnav a.n-catalogo:hover { background: #5a6553; }
+header .mainnav a.act::after { content: ""; position: absolute; bottom: 3px; left: 50%;
+  transform: translateX(-50%); width: 20px; height: 2px; background: var(--dorado); border-radius: 1px; }
+header .brand { flex: 1; display: flex; align-items: center; justify-content: center; }
+header .brand svg { height: 30px; }
+header .btn-tool { width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent;
+  color: #eef1e6; font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; transition: background-color .15s; }
+header .btn-tool:hover { background: #5c6d48; }
+main { max-width: 760px; margin: 0 auto; padding: 14px; }
+.card { background: var(--surface); border-radius: var(--radio); padding: 16px 18px;
+  margin-bottom: 14px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+.card.ok { border-color: var(--verde); } .card.warn { border-color: var(--terracota); }
+.franja { font-weight: 700; color: var(--verde-osc); font-size: 15px; margin: 0 0 11px;
+  padding-bottom: 11px; border-bottom: 1px solid var(--border); }
 .fav { color: var(--dorado); font-weight: 700; }
 .chip { display: inline-block; background: var(--chip-bg); color: var(--chip-text);
-  border-radius: 20px; padding: 2px 10px; font-size: 12px; margin: 2px 2px; white-space: nowrap; }
-.meta { color: var(--muted); font-size: 13px; }
+  border-radius: 20px; padding: 3px 11px; font-size: 11px; margin: 2px 3px 2px 0; white-space: nowrap; }
+.meta { color: var(--muted); font-size: 12px; }
 .note { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
-.ok { color: var(--verde); } .warn { color: var(--terracota); font-weight: 600; }
-.btn { display: inline-block; background: var(--verde); color: #fff; border: 0;
-  padding: 9px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-  text-decoration: none; transition: filter .15s; }
-.btn:hover { filter: brightness(1.06); }
-.btn.sec { background: #6b7169; } .btn.mini { padding: 3px 10px; font-size: 12px; font-weight: 600; }
-input, textarea, select { width: 100%; padding: 9px; border: 1px solid var(--border);
-  border-radius: 8px; font: inherit; background: var(--surface); color: var(--text); }
-input[type=range] { padding: 0; accent-color: var(--verde); }
-input[type=checkbox] { width: auto; accent-color: var(--verde); }
-label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid #f1eee2; vertical-align: middle; }
+th { color: var(--muted); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+.ok { color: var(--verde-accion); } .warn { color: var(--terracota); font-weight: 600; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--verde-accion); color: #fff; border: 0; padding: 9px 16px; border-radius: 7px;
+  font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; transition: background-color .15s; }
+.btn:hover { background: var(--verde-accion-h); }
+.btn.sec { background: var(--sec-bg); color: var(--verde-osc); }
+.btn.sec:hover { background: var(--sec-bg-h); }
+.btn.neu { background: var(--neutro-bg); color: #4a4636; }
+.btn.neu:hover { background: var(--neutro-bg-h); }
+.btn.mini { padding: 5px 11px; font-size: 12px; }
+input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; font: inherit; font-size: 13px; background: var(--bg); color: var(--text); }
+input:hover, input:focus, textarea:hover, textarea:focus, select:hover, select:focus {
+  border-color: var(--verde); outline: none; box-shadow: none; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; padding: 0;
+  border: 0; border-radius: 3px; background: #cdd8bd; cursor: pointer; }
+input[type=range]:hover, input[type=range]:focus { border: 0; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px;
+  height: 12px; border-radius: 50%; background: #fff; border: 1px solid #aeb99a; cursor: pointer; }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff;
+  border: 1px solid #aeb99a; cursor: pointer; }
+input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; padding: 0;
+  border: 1px solid #cfcabb; border-radius: 4px; background: #fff; cursor: pointer; position: relative;
+  vertical-align: -3px; flex: none; }
+input[type=checkbox]:hover { border-color: #b7b09a; }
+input[type=checkbox]:checked::after { content: "\\2713"; position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center; color: var(--verde); font-size: 12px; font-weight: 700; }
+label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 12px; color: #5b5748; }
 .row { display: flex; gap: 14px; flex-wrap: wrap; }
 .row > div { flex: 1; min-width: 150px; }
-.big { font-size: 22px; font-weight: 700; }
-a.receta { color: inherit; text-decoration: underline; text-decoration-color: var(--verde); }
+.big { font-size: 22px; font-weight: 700; color: var(--text); }
+a.receta { color: var(--verde-osc); text-decoration: none; }
+a.receta:hover { color: var(--verde); text-decoration: underline; }
 .arrows { display: inline-flex; gap: 8px; align-items: center; margin-left: 10px; }
-.arrows a, .arrows span.off { padding: 2px 11px; border-radius: 7px; background: var(--verde);
-  color: #fff; text-decoration: none; font-weight: 700; }
-.arrows span.off { background: #b6bbb4; }
+.arrows a, .arrows span.off { padding: 3px 11px; border-radius: 7px; background: var(--neutro-bg);
+  color: var(--verde-osc); text-decoration: none; font-weight: 700; }
+.arrows a:hover { background: var(--neutro-bg-h); }
+.arrows span.off { background: var(--neutro-bg); color: var(--muted); }
 .ticket { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;
   max-width: 560px; margin: 0 auto; border: 1px dashed var(--muted); padding: 18px 16px;
   background: var(--surface); color: var(--text); }
@@ -102,7 +134,7 @@ pre.log { background: #111; color: #9f9; padding: 10px; border-radius: 8px;
 .skip-link:focus { left: 0; }
 /* Vista de impresion (#68): sin cabecera/nav/botones, fondo blanco, sin sombras. */
 @media print {
-  header nav, form, .btn, .arrows a[href], .off { display: none !important; }
+  header, form, .btn, .arrows a[href], .off { display: none !important; }
   body { background: #fff !important; }
   .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
   a[href]:after { content: "" !important; }
@@ -111,20 +143,37 @@ pre.log { background: #111; color: #9f9; padding: 10px; border-radius: 8px;
 )
 
 
-def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None) -> str:
+def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None, activa: str = "") -> str:
+    """Envuelve el cuerpo en la plantilla base (barra de herramientas + tema).
+
+    `activa` marca la sección de la barra (menu/compra/recetas/catalogo) para
+    pintar la barrita mostaza bajo el botón activo.
+    """
     meta = f'<meta http-equiv="refresh" content="{refrescar}">' if refrescar else ""
+
+    def _nav(sec: str, url: str, txt: str) -> str:
+        cls = f"n-{sec}" + (" act" if activa == sec else "")
+        return f'<a class="{cls}" href="{url}">{txt}</a>'
+
+    barra = (
+        "<header>"
+        '<nav class="mainnav">'
+        + _nav("menu", "/", "Menú")
+        + _nav("compra", "/compra", "Compra")
+        + _nav("recetas", "/recetas", "Recetas")
+        + _nav("catalogo", "/catalogo", "Catálogo")
+        + "</nav>"
+        f'<a class="brand" href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG}</a>'
+        '<a class="btn-tool" href="/config" title="Configuración" aria-label="Configuración">⚙</a>'
+        '<button class="btn-tool" type="button" title="Ayuda" aria-label="Ayuda">?</button>'
+        "</header>"
+    )
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{meta}
 <link rel="icon" href="{favicon_data_uri()}">
 <title>{html.escape(titulo)} · {NOMBRE}</title><style>{_ESTILO}</style>{TEMA_SCRIPT}</head><body>
 <a href="#contenido" class="skip-link">Saltar al contenido</a>
-<header><a href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG.replace('<svg', '<svg class="logo"', 1)}</a>
-<nav><a href="/">Menú</a><a href="/compra">Lista de la compra</a>
-<a href="/recetas">Recetas</a><a href="/valoraciones">Valoraciones</a><a href="/catalogo">Catálogo</a>
-<a href="/buscar">Buscar</a><a href="/sustituciones">Sustituciones</a><a href="/matching">Correcciones</a>
-<a href="/historial">Historial</a><a href="/dashboard">Dashboard</a><a href="/config">Configuración</a>
-<button class="btn mini sec" type="button" onclick="alternarTema()" title="Cambiar tema claro/oscuro" aria-label="Cambiar entre tema claro y oscuro" style="margin-left:6px">🌓</button>
-</nav></header>
+{barra}
 <main id="contenido">{cuerpo}</main></body></html>"""
 
 
