@@ -223,6 +223,30 @@ table.cat-tabla tr:nth-child(odd) td { background: var(--fila-alt); }
   :root:not([data-theme="light"]) .lc-fila:hover { background: var(--hover-fila); }
   :root:not([data-theme="light"]) .lc-total-fila { border-top-color: var(--text); }
 }
+/* Valoraciones (spec Lote 11): baremos con estrellas interactivas y selectores ±. */
+.baremo-fila { display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--neutro-bg); font-size: 13px;
+  color: var(--text); }
+.baremo-fila:last-of-type { border-bottom: none; }
+.estrellas { display: inline-flex; gap: 2px; }
+.estrellas button { background: transparent; border: 0; font-size: 18px; line-height: 1;
+  cursor: pointer; color: #dcd7c6; padding: 1px 2px; transition: transform .1s, color .1s; }
+.estrellas button.on { color: var(--dorado); }
+.estrellas button.hov { color: #e3c264; transform: scale(1.12); }
+.sel-fila { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.sel-fila select { flex: 1; }
+.pm-btn { width: 22px; height: 22px; border-radius: 50%; border: 0; background: #f4f2ec;
+  color: #b3ae9e; cursor: pointer; display: inline-flex; align-items: center;
+  justify-content: center; padding: 0; flex: none;
+  transition: background-color .15s, color .15s; }
+.pm-btn svg { width: 10px; height: 10px; display: block; }
+.pm-btn.menos:hover { background: #f7e4e0; color: #b5482f; }
+.pm-btn.mas:hover { background: #e7f0dd; color: #4d7a3a; }
+.pm-btn.oculto { visibility: hidden; }
+:root[data-theme="dark"] .pm-btn { background: var(--neutro-bg); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pm-btn { background: var(--neutro-bg); }
+}
 /* Detalle de receta (spec Lote 11). */
 .titulo-receta { font-size: 22px; font-weight: 700; color: var(--text); text-decoration: none; }
 a.titulo-receta:hover { color: var(--verde); }
@@ -463,6 +487,12 @@ AYUDA_SECCION = {
         "<b>Buscar.</b> Búsqueda global: recetas por título y productos del catálogo por "
         "nombre. Pulsa una receta para abrir su ficha, o un producto para ver y corregir "
         "sus datos."
+    ),
+    "valoraciones": (
+        "<b>Valoraciones.</b> En «Valorar» aparecen las recetas cocinadas esta semana o la "
+        "anterior que aún no has valorado; pulsa una para puntuarla. En «Valoraciones» "
+        "puedes buscar y re-valorar las ya puntuadas. Tus valoraciones alimentan la "
+        "palatabilidad del optimizador: lo que te gusta vuelve más a menudo al menú."
     ),
     "matching": (
         "<b>Correcciones.</b> Ingredientes de receta sin producto de Alcampo asignado: "

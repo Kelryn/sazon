@@ -1716,32 +1716,42 @@ function cambiarRaciones(d) {{
         finally:
             conn.close()
         aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
+        # Tarjeta "Valorar" (spec): filas clicables SIN separadores, «valorar ›» a la
+        # derecha; la nota de la cola vive en el modo ayuda ❓.
         filas_pend = "".join(
-            f'<li><a class="receta" href="/valoraciones/{html.escape(p["receta_id"])}">'
-            f'{html.escape(p["titulo"])}</a></li>'
+            f'<a class="fila-link flex" href="/valoraciones/{html.escape(p["receta_id"])}">'
+            f"<span>{html.escape(p['titulo'])}</span>"
+            '<span class="lado">valorar ›</span></a>'
             for p in pendientes
-        ) or "<li class='meta'>Nada pendiente: todo lo cocinado recientemente ya está valorado.</li>"
+        ) or (
+            '<p class="meta" style="margin:8px 18px">Nada pendiente: todo lo cocinado '
+            "recientemente ya está valorado.</p>"
+        )
         cola = (
-            '<div class="card"><div class="franja">Recetas por valorar</div>'
-            '<p class="meta">Cocinadas esta semana o la anterior, sin valorar todavía.</p>'
-            f"<ul style='padding-left:20px'>{filas_pend}</ul></div>"
+            '<div class="card"><div class="franja">Valorar</div>'
+            f'<div class="filas-full">{filas_pend}</div></div>'
         )
+        # Tarjeta "Valoraciones": buscador + filas clicables con la media ★ mostaza.
         filas_valoradas = "".join(
-            f'<tr><td><a class="receta" href="/valoraciones/{html.escape(v["id"])}">'
-            f'{html.escape(v["titulo"])}</a></td>'
-            f'<td style="text-align:right">{v["media"]:.1f} ★ ({v["n_baremos"]} baremos)</td></tr>'
+            f'<a class="fila-link flex" href="/valoraciones/{html.escape(v["id"])}">'
+            f"<span>{html.escape(v['titulo'])}</span>"
+            f'<span class="lado"><span class="fav">{v["media"]:.1f} ★</span> '
+            f"({v['n_baremos']} baremos)</span></a>"
             for v in valoradas
-        ) or '<tr><td colspan="2" class="meta">Ninguna todavía.</td></tr>'
+        ) or '<p class="meta" style="margin:8px 18px">Ninguna todavía.</p>'
         historico = (
-            '<div class="card"><div class="franja">Ya valoradas (re-valorar)</div>'
-            '<form method="get" action="/valoraciones">'
+            '<div class="card"><div class="franja">Valoraciones</div>'
+            '<form method="get" action="/valoraciones" style="display:flex;gap:10px;'
+            'align-items:center;flex-wrap:wrap;margin-bottom:4px">'
             f'<input name="q" value="{html.escape(q)}" placeholder="Buscar receta…" '
-            'style="max-width:320px;display:inline-block">'
-            ' <button class="btn mini" type="submit">Buscar</button></form>'
-            f'<table style="margin-top:10px"><tr><th>Receta</th><th>Media</th></tr>'
-            f"{filas_valoradas}</table></div>"
+            'style="flex:1;min-width:200px">'
+            '<button class="btn sec" type="submit">Buscar</button></form>'
+            f'<div class="filas-full">{filas_valoradas}</div></div>'
         )
-        return _pagina("Valoración de recetas", aviso + cola + historico)
+        return _pagina(
+            "Valoración de recetas", aviso + cola + historico,
+            activa="recetas", ayuda="valoraciones",
+        )
 
     @app.get("/valoraciones/{receta_id}", response_class=HTMLResponse)
     def valoracion_receta_page(receta_id: str):
@@ -1751,36 +1761,124 @@ function cambiarRaciones(d) {{
                 "SELECT titulo FROM recetas WHERE id = ?", (receta_id,)
             ).fetchone()
             if titulo_fila is None:
-                return _pagina("Valorar receta", '<div class="card warn">Receta no encontrada.</div>')
+                return _pagina(
+                    "Valorar receta", '<div class="card warn">Receta no encontrada.</div>',
+                    activa="recetas",
+                )
             actuales = valoraciones_de(conn, receta_id)
             detalle = detalle_de(conn, receta_id)
+            ings_receta = [
+                f["nombre_normalizado"] for f in conn.execute(
+                    "SELECT DISTINCT nombre_normalizado FROM receta_ingredientes "
+                    "WHERE receta_id = ? AND nombre_normalizado IS NOT NULL "
+                    "ORDER BY nombre_normalizado", (receta_id,),
+                ).fetchall()
+            ]
         finally:
             conn.close()
 
-        filas_baremos = "".join(
-            f'<div class="row" style="align-items:center">'
-            f'<label style="flex:2">{html.escape(etiqueta)}</label>'
-            f'<select name="baremo__{clave}" style="flex:1">'
-            + "".join(
-                f'<option value="{n}"{" selected" if actuales.get(clave) == n else ""}>'
-                f'{"★" * n} ({n})</option>'
+        # 8 baremos con ESTRELLAS 1-5 interactivas (spec): mostaza el valor fijado,
+        # dorado claro + scale en el hover; el valor viaja en un input oculto.
+        filas_baremos = ""
+        for clave, etiqueta in BAREMOS:
+            valor = actuales.get(clave) or 0
+            estrellas = "".join(
+                f'<button type="button" data-v="{n}"{" class=on" if n <= valor else ""}>★</button>'
                 for n in range(1, 6)
             )
-            + "</select></div>"
-            for clave, etiqueta in BAREMOS
-        )
+            filas_baremos += (
+                f'<div class="baremo-fila"><span>{html.escape(etiqueta)}</span>'
+                f'<span class="estrellas" data-clave="{clave}">{estrellas}'
+                f'<input type="hidden" name="baremo__{clave}" value="{valor or ""}">'
+                "</span></div>"
+            )
+
+        # Selectores con − / + (spec): ingredientes = los de la receta; métodos =
+        # catálogo básico (pendiente de curar en el roadmap).
+        metodos = [
+            "Al horno", "A la plancha", "Frito", "Guisado", "Al vapor", "Hervido",
+            "Crudo / ensalada", "Sofrito / rehogado", "En salsa", "Gratinado",
+        ]
+
+        def _opciones(opciones: list[str], elegido: str = "") -> str:
+            base = list(dict.fromkeys(opciones + ([elegido] if elegido else [])))
+            return '<option value=""></option>' + "".join(
+                f'<option value="{html.escape(o)}"{" selected" if o == elegido else ""}>'
+                f"{html.escape(o)}</option>"
+                for o in base
+            )
+
+        def _grupo_sel(nombre: str, opciones: list[str], valores: list[str]) -> str:
+            filas_v = ""
+            for v in valores or [""]:
+                filas_v += (
+                    f'<div class="sel-fila"><select name="{nombre}">'
+                    f"{_opciones(opciones, v)}</select>"
+                    '<button type="button" class="pm-btn menos" aria-label="Quitar" '
+                    'onclick="quitarSel(this)"><svg viewBox="0 0 16 16" fill="none" '
+                    'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">'
+                    '<line x1="4" y1="8" x2="12" y2="8"/></svg></button>'
+                    '<button type="button" class="pm-btn mas" aria-label="Añadir otra" '
+                    'onclick="anadirSel(this)"><svg viewBox="0 0 16 16" fill="none" '
+                    'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">'
+                    '<line x1="8" y1="4" x2="8" y2="12"/><line x1="4" y1="8" x2="12" y2="8"/>'
+                    "</svg></button></div>"
+                )
+            return f'<div class="sel-grupo" data-nombre="{nombre}">{filas_v}</div>'
+
         cuerpo = (
-            f'<div class="card"><div class="big">{html.escape(titulo_fila["titulo"])}</div>'
+            f'<div class="card"><div class="franja">{html.escape(titulo_fila["titulo"])}</div>'
             f'<form method="post" action="/valoraciones/{html.escape(receta_id)}">'
             f"{filas_baremos}"
-            '<label style="margin-top:10px">Ingredientes que más te gustaron (uno por línea)</label>'
-            f'<textarea name="ingredientes" rows="3">{html.escape(chr(10).join(detalle["ingrediente"]))}</textarea>'
-            '<label>¿Algo del método de preparación? (uno por línea)</label>'
-            f'<textarea name="metodo" rows="2">{html.escape(chr(10).join(detalle["metodo"]))}</textarea>'
-            '<div style="margin-top:10px"><button class="btn" type="submit">Guardar valoración</button></div>'
+            '<label style="margin-top:14px">Ingredientes que más te gustaron</label>'
+            + _grupo_sel("ingredientes", ings_receta, detalle["ingrediente"])
+            + "<label>¿Algo del método de preparación?</label>"
+            + _grupo_sel("metodo", metodos, detalle["metodo"])
+            + '<div style="margin-top:12px"><button class="btn" type="submit">'
+            "Guardar valoración</button></div>"
             "</form></div>"
+            + """<script>
+document.querySelectorAll('.estrellas').forEach(function(grupo){
+  var botones = Array.from(grupo.querySelectorAll('button'));
+  var oculto = grupo.querySelector('input[type=hidden]');
+  function pintar(hasta, clase){
+    botones.forEach(function(b){
+      b.classList.toggle(clase, parseInt(b.dataset.v) <= hasta);
+    });
+  }
+  botones.forEach(function(b){
+    b.addEventListener('mouseenter', function(){ pintar(parseInt(b.dataset.v), 'hov'); });
+    b.addEventListener('click', function(){
+      oculto.value = b.dataset.v; pintar(parseInt(b.dataset.v), 'on');
+    });
+  });
+  grupo.addEventListener('mouseleave', function(){ pintar(0, 'hov'); });
+});
+function refrescarMas(grupo){
+  var filas = grupo.querySelectorAll('.sel-fila');
+  filas.forEach(function(f, i){
+    f.querySelector('.mas').classList.toggle('oculto', i !== filas.length - 1);
+  });
+}
+function quitarSel(btn){
+  var grupo = btn.closest('.sel-grupo');
+  var filas = grupo.querySelectorAll('.sel-fila');
+  if (filas.length > 1) { btn.closest('.sel-fila').remove(); }
+  else { btn.closest('.sel-fila').querySelector('select').value = ''; }
+  refrescarMas(grupo);
+}
+function anadirSel(btn){
+  var grupo = btn.closest('.sel-grupo');
+  var fila = btn.closest('.sel-fila');
+  var nueva = fila.cloneNode(true);
+  nueva.querySelector('select').value = '';
+  grupo.appendChild(nueva);
+  refrescarMas(grupo);
+}
+document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
+</script>"""
         )
-        return _pagina("Valorar receta", cuerpo)
+        return _pagina("Valorar receta", cuerpo, activa="recetas", ayuda="valoraciones")
 
     @app.post("/valoraciones/{receta_id}")
     async def valoracion_receta_guardar(receta_id: str, request: Request):
@@ -1793,8 +1891,14 @@ function cambiarRaciones(d) {{
                     estrellas[clave] = int(valor)
                 except ValueError:
                     pass
-        ingredientes = [t for t in str(form.get("ingredientes", "")).splitlines() if t.strip()]
-        metodo = [t for t in str(form.get("metodo", "")).splitlines() if t.strip()]
+        # Los selectores del rediseño mandan varios valores con el mismo nombre;
+        # se admite también el formato antiguo de textarea (líneas) por si acaso.
+        ingredientes = [str(t).strip() for t in form.getlist("ingredientes") if str(t).strip()]
+        metodo = [str(t).strip() for t in form.getlist("metodo") if str(t).strip()]
+        if len(ingredientes) == 1 and "\n" in ingredientes[0]:
+            ingredientes = [t.strip() for t in ingredientes[0].splitlines() if t.strip()]
+        if len(metodo) == 1 and "\n" in metodo[0]:
+            metodo = [t.strip() for t in metodo[0].splitlines() if t.strip()]
         conn, _ = _conn()
         try:
             guardar_valoracion(conn, receta_id, estrellas, ingredientes, metodo)
