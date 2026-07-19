@@ -64,6 +64,10 @@ exactamente lo aquí descrito.
   `◀` centrada sobre el borde Desayuno↔Comida y `▶` sobre el borde Comida↔Cena.
   Flechas 28×28, transparentes, glifo perfectamente centrado. Hover `#f1eee0`
   (beige ligeramente más oscuro que el fondo).
+- **Botón "Historial"** a la **derecha del todo** de la fila de acciones (sobre la
+  columna Cena, alineado a la derecha): botón discreto (fondo `#f1eee2`, texto
+  `#4a4636`, hover `#e9e5d5`) con icono de reloj/deshacer + texto "Historial".
+  Es el **único acceso al Historial** (no va en la barra de herramientas).
 
 ### Tabla del menú (tarjeta blanca, borde `#eeead9`, radio 10px)
 
@@ -303,6 +307,14 @@ Barra de herramientas común (sticky), sección **Recetas** activa.
 - `input` de URL (estilo común) + botón **"Importar"** (botón secundario) + nota
   explicativa.
 
+### Accesos desde Recetas
+
+- **"Nueva receta"** (botón secundario verde) arriba a la derecha, junto al título.
+- **"Sustituciones"** (botón secundario neutro `#f1eee2`/`#e9e5d5`) **debajo de la
+  columna de propia/catálogo** (abajo a la derecha, en la misma línea que la nota
+  al pie). Es el **único acceso a Sustituciones** (no va en la barra de
+  herramientas).
+
 ---
 
 ## Pantalla: Editor de receta (`/recetas/nueva`, `/recetas/{id}/editar`)
@@ -375,6 +387,9 @@ activa aquí). Dos tarjetas.
     (secundario) por fila.
 - **Paginación** (◀ · Página X/Y (N productos) · ▶) **centrada horizontalmente**;
   flechas con estilo de botón neutro.
+- **Botón "Correcciones"** en la cabecera de esta tarjeta (derecha del título
+  "Catálogo"), botón secundario neutro `#f1eee2`/`#e9e5d5`. Es el **acceso a la
+  pantalla de Correcciones** (que no va en la barra de herramientas).
 
 ---
 
@@ -419,5 +434,194 @@ Barra común. Una tarjeta con el **título** de la receta y separador.
 
 ---
 
-<!-- Pantallas pendientes de revisar: Buscar · Sustituciones ·
-Correcciones de matching · Historial · Dashboard · Configuración. -->
+## Pantalla: Configuración (`/config`)
+
+Barra común. **Estructura: menú lateral** — a la izquierda una lista de secciones
+(botones), a la derecha el contenido de la sección seleccionada. El item activo se
+resalta (`#eef3e8`, texto `#3d4a2e` 700), hover `#f2efe4`; el menú es *sticky*.
+Secciones: **Menú · Perfil y calorías · Apariencia · Actualizaciones · Copias de
+seguridad · Catálogo programado**.
+
+### Controles comunes de Configuración
+
+- **Interruptor (switch)**: pista `#d7dccd`, verde `#3f7a3a` al activar, círculo
+  blanco de 16px que se desliza. Se usa para toggles (Calcular, auto-actualizar).
+- **Segmentado**: opción activa en **verde llamativo** `#3f7a3a` (texto blanco);
+  opciones no activas en **gris muy claro** `#f6f5f0` (texto apagado); **hover** de
+  las no activas a **verde más claro que el activo** `#d7e3c6`.
+- **Barras de peso (range)**: pista **verde claro** `#cdd8bd`, tirador **blanco**
+  pequeño (12px) con borde `#aeb99a`. (Forzar `-webkit-appearance:none` + pseudo-
+  elementos.)
+- **Stepper numérico**: input de texto (`inputmode=numeric`, **sin flechitas**
+  nativas) editable, con botones circulares **−** (rojo `#f6e7e3`/`#b5482f`) a la
+  izquierda y **+** (verde `#e9f0e0`/`#4d7a3a`) a la derecha (signo en SVG). Se
+  puede escribir el número o sumar/restar.
+
+### Sección "Menú"
+
+Cuatro **grupos colapsables** (acordeón, **todos empiezan colapsados**; chevron ▸
+gira a ▾), en este orden:
+1. **Configuración general** (campos numéricos), con subgrupos internos: *Hogar*
+   (comensales, niños, ración infantil %), *Energía y raciones* (kcal/persona-día,
+   ración mín %, ración máx %), *Planificación* (semanas, días entre repeticiones,
+   tiempo máx receta).
+2. **Exclusiones** (cuadros de texto): ingredientes que NO quieres, alérgenos,
+   utensilios que NO tienes.
+3. **Intereses**: las 10 barras de peso 0–100 (sabor, salud, favoritas, cena
+   ligera, racionalizar, sobras, ultraprocesados, temporada, despensa, festiva).
+4. **Batchcooking**: selección de días con **círculos de una letra** (L M X J V S
+   D) que se activan en verde (opción B elegida).
+   *(Nota: presupuesto y despensa siguen existiendo en el modelo; ubicarlos en el
+   grupo que corresponda al implementar.)*
+- Botón **Guardar** al final.
+
+### Sección "Perfil y calorías"
+
+- **Interruptor "Calcular"** (switch, opción A) arriba. La explicación
+  (Mifflin-St Jeor, sustituye al valor fijo) va al **modo ayuda ❓**, no en la
+  página.
+- Subgrupo **"Tus datos"**: Peso · Altura · Edad · Sexo · Actividad · Objetivo.
+- **Resultado** de kcal calculadas en recuadro verde suave (`#eef3e8`).
+- Botón **Guardar perfil**.
+
+### Sección "Apariencia"
+
+- Fila **"Tema"** con segmentado **Claro / Oscuro / Sistema** (estilo segmentado
+  común: activo verde llamativo, resto gris muy claro, hover verde suave).
+
+### Sección "Actualizaciones"
+
+- **3 filas del mismo alto** (50px), textos con la **misma fuente y color** (13px
+  `#2a2a1f`): *Versión instalada* → valor · *Canal* → segmentado *Estable/Beta* ·
+  *Estado* → botón *Buscar actualización*.
+- **Todos los botones al mismo alto** (34px). *Estable* y *Beta* estrechos, con un
+  **pequeño espacio** entre ellos, y **juntos ocupan lo mismo** (170px) que el
+  botón *Buscar actualización*.
+- (Cuando haya versión nueva: aviso "✨ Nueva versión", changelog plegable y botón
+  *Instalar* — pendiente de mockup si se quiere.)
+
+### Sección "Copias de seguridad"
+
+- Botón **Crear copia ahora**.
+- **Tabla** (Fecha · Tamaño · Restaurar) con encabezado gris `#f2f0ea`, filas
+  alternas y botón **Restaurar** discreto por fila (hover verde suave).
+- La nota explicativa (copia al arrancar, se guardan 10, restaurar guarda antes)
+  va al **modo ayuda ❓**.
+
+### Sección "Catálogo programado"
+
+- Filas del mismo alto: *Actualizar el catálogo automáticamente* → **switch** ·
+  *Avisar si tiene más de (días)* → **stepper** (campo estrecho, sin flechitas, con
+  −/+) · *Estado* → texto ("Actualizado hace N días").
+
+---
+
+## Pantalla: Historial (`/historial`)
+
+**Acceso**: NO está en la barra de herramientas; se llega desde el **botón
+"Historial"** de la pantalla de Menú semanal (fila de acciones, arriba a la
+derecha). Barra común. Dos vistas.
+
+### Lista de planes (`/historial`)
+
+- Tarjeta **"Planes generados"**: tabla con columnas **Fecha · Semanas ·
+  Coste/semana · Coste total** (encabezado gris `#f2f0ea` con borde inferior,
+  filas alternas `#faf8f1`). Cada fila es **clicable** (hover verde `#eef3e8`) y
+  lleva al detalle del plan.
+- Tarjeta **"Compartir menús"**: **zona de arrastrar y soltar** (opción C) para
+  importar un plan `.json`: recuadro de borde punteado `#cdd8bd`, radio 12px, con
+  un **círculo de icono** (flecha de subida, fondo `#eef3e8`) a la izquierda y el
+  texto "Arrastra tu archivo .json aquí / o haz clic para seleccionarlo". Al
+  arrastrar un archivo encima, resalta en verde (borde `#4d5d3a`, fondo `#eef3e8`).
+
+### Detalle de un plan (`/historial/{plan_id}`)
+
+- Cada semana con su **tabla de días** (la misma de Menú semanal), su coste, y en
+  los planes que no son el actual un botón **"Repetir esta semana"** (añade esa
+  semana al final del plan actual).
+- Enlace/botón **"Exportar este plan (.json)"** para compartirlo.
+- Nota de solo-lectura para planes antiguos → al **modo ayuda ❓**.
+
+---
+
+## Pantalla: Sustituciones (`/sustituciones`)
+
+**Acceso**: NO está en la barra de herramientas; se llega desde el botón
+**"Sustituciones"** de la pantalla de Recetas. Barra común.
+
+- Tarjeta **"Sustituciones"**: buscador ("¿Qué ingrediente te falta? (p. ej.
+  nata, huevo, mantequilla)", input común) + botón **Buscar**. La nota "son
+  sustituciones de cocina, no productos del catálogo…" va al **modo ayuda ❓**.
+- Tarjeta de resultados **"En vez de «X», prueba:"**: lista de alternativas, cada
+  una en una **fila a todo el ancho** con número en círculo y **hover de fondo**
+  (`#eef3e8`) para poder **seleccionar** el sustituto.
+
+---
+
+## Pantalla: Correcciones (`/matching`)
+
+**Acceso**: NO está en la barra; se llega desde el botón **"Correcciones"** de la
+pantalla de Catálogo. Barra común.
+
+- Tarjeta **"Correcciones"**: métricas en tarjetitas (Emparejados X/Y ·
+  **Sin producto** Z en rojo). Nota "asigna a mano los que falten…".
+- Tarjeta **"Posibles descatalogados"** (si hay): aviso + botón secundario
+  **"Buscar sustituto automáticamente"**.
+- Tarjeta **"Emparejamientos"** (antes "Ingredientes sin emparejar"),
+  **colapsable**: filas de ingrediente sin producto. El **ingrediente es un
+  botón** (fondo verde suave `#f3f6ec`, hover `#e2ecd4`, con icono ↗) que **abre
+  su receta en otra ventana** (`target="_blank"`) para revisarla sin salir. A la
+  derecha, botón **"Buscar producto…"** (lleva a la vista de asignar producto).
+  *(Un ingrediente normalizado puede estar en varias recetas → enlazar a una que
+  lo use, o mostrar un menú si hay varias.)*
+- Tarjeta **"Sinónimos"** (antes "Sinónimos (aprender correcciones)"),
+  **colapsable**: formulario *Palabra* / *Equivale a* / **Añadir** + lista de
+  sinónimos con **Borrar** (hover rojo). La nota explicativa va al **modo ayuda ❓**.
+
+### Vista de asignar producto (`/matching?ing=…`)
+
+- Buscador de producto + lista de candidatos (nombre, marca, precio) cada uno con
+  botón **"Asignar"**; enlace "← volver a la lista".
+
+---
+
+## Pantalla: Buscar (`/buscar`)
+
+**Acceso**: NO está en la barra; se llega desde el botón **"Buscar"** (con icono
+de lupa) de la pantalla de Catálogo, **del mismo tamaño** (118×32) que el botón
+"Correcciones", ambos en la cabecera de la tarjeta "Catálogo". Barra común.
+
+- Tarjeta **"Buscar"**: campo "Buscar recetas o productos…" + botón **Buscar**.
+- Tarjeta **"Recetas (N)"**: resultados de recetas; cada fila (título + fuente a
+  la derecha) es **clicable** con hover verde `#eef3e8`, lleva a la ficha.
+- Tarjeta **"Productos del catálogo (N)"**: resultados de productos; filas
+  (nombre + precio) clicables con hover.
+- *(Pendiente decidir: el botón podría llamarse "Buscar todo/global" para no
+  confundirlo con el buscador de productos del propio Catálogo.)*
+
+---
+
+<!-- Pendiente (opcional): Dashboard, si se decide conservarlo. -->
+
+## Estado del diseño (Lote 11)
+
+Diseñadas y aprobadas: **Menú semanal · Detalle de receta · Lista de la compra ·
+Recetas · Editor de receta · Catálogo · Valoraciones (lista + formulario) ·
+Configuración · Historial · Sustituciones · Correcciones · Buscar**.
+
+Barra de herramientas: **Menú · Compra · Recetas · Catálogo** + logo + ayuda ❓.
+El resto de secciones se acceden con botones dentro de otras pantallas: Historial
+(desde Menú), Sustituciones (desde Recetas), Correcciones y Buscar (desde
+Catálogo). El tema día/noche está en Configuración → Apariencia.
+
+### Pendiente para la fase de implementación
+- Implementar en el código real (`web/app.py`, `web/plantillas.py`), **sin CDN**
+  (todo embebido) para que siga empaquetando a `.exe`.
+- **Modo ayuda ❓** por pantalla, con textos editables en `.md` (recoger aquí
+  todos los textos que se han ido "moviendo a ayuda").
+- **Flag `es_desayuno`** en el editor de receta (columna + migración + guardado +
+  uso en el solver para la columna Desayuno del menú).
+- **Selectores de valoración** (ingredientes/métodos): definir las listas de
+  opciones (ver ROADMAP).
+- Decidir si se conserva **Dashboard**.
+- Revisión final + guía de estilo, y cierre de lote (versión, tests, commit, tag).
