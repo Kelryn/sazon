@@ -67,6 +67,13 @@ header .btn-tool { width: 30px; height: 30px; border-radius: 7px; border: 0; bac
   display: inline-flex; align-items: center; justify-content: center; transition: background-color .15s; }
 header .btn-tool:hover { background: #5c6d48; }
 main { max-width: 760px; margin: 0 auto; padding: 14px; }
+/* Modo ayuda (❓): paneles ocultos que el boton de la barra muestra. */
+.ayuda { display: none; background: #fbf7e8; border: 1px solid #ece0b8; color: #6b6033;
+  border-radius: var(--radio); padding: 14px 16px; margin-bottom: 14px; font-size: 13px; line-height: 1.55; }
+body.ayuda-on .ayuda { display: block; }
+:root[data-theme="dark"] .ayuda { background: #2a2716; border-color: #4a442a; color: #d8cfa6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ayuda {
+  background: #2a2716; border-color: #4a442a; color: #d8cfa6; } }
 .card { background: var(--surface); border-radius: var(--radio); padding: 16px 18px;
   margin-bottom: 14px; box-shadow: var(--shadow); border: 1px solid var(--border); }
 .card.ok { border-color: var(--verde); } .card.warn { border-color: var(--terracota); }
@@ -151,6 +158,33 @@ pre.log { background: #111; color: #9f9; padding: 10px; border-radius: 8px;
 )
 
 
+# Textos del modo ayuda (❓), por sección de la barra. El botón ❓ de la cabecera
+# los muestra/oculta (body.ayuda-on). Se pueden ampliar sin tocar el resto de la UI.
+AYUDA_SECCION = {
+    "menu": (
+        "<b>Menú semanal.</b> Genera un plan de comidas y cenas optimizado por coste, "
+        "salud (Nutri-Score y grupos de alimentos), sabor, temporada y variedad. Usa "
+        "«Generar alternativa» para otra versión de la semana, o «Cambiar por otra» para "
+        "sustituir una receta concreta. Con «Historial» ves y repites planes anteriores. "
+        "Pulsa una receta para ver ingredientes y precios de Alcampo."
+    ),
+    "compra": (
+        "<b>Lista de la compra.</b> Reúne todos los productos del menú de la semana con sus "
+        "precios de Alcampo, agrupados como un recibo. Puedes exportarla e imprimirla."
+    ),
+    "recetas": (
+        "<b>Recetas.</b> Todas las recetas disponibles: las tuyas (editables) y las del "
+        "catálogo (solo lectura). Crea una con «Nueva receta», importa por URL, o busca "
+        "sustitutos de cocina con «Sustituciones»."
+    ),
+    "catalogo": (
+        "<b>Catálogo.</b> Los productos de Alcampo en la base de datos. Actualízalo por "
+        "categorías, corrige datos de un producto, empareja ingredientes sin producto "
+        "(«Correcciones») o busca en todo («Buscar»)."
+    ),
+}
+
+
 def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None, activa: str = "") -> str:
     """Envuelve el cuerpo en la plantilla base (barra de herramientas + tema).
 
@@ -173,16 +207,19 @@ def _pagina(titulo: str, cuerpo: str, refrescar: int | None = None, activa: str 
         + "</nav>"
         f'<a class="brand" href="/" title="{NOMBRE} — {ESLOGAN}">{LOGO_SVG}</a>'
         '<a class="btn-tool" href="/config" title="Configuración" aria-label="Configuración">⚙</a>'
-        '<button class="btn-tool" type="button" title="Ayuda" aria-label="Ayuda">?</button>'
+        '<button class="btn-tool" type="button" title="Mostrar/ocultar ayuda" aria-label="Ayuda"'
+        ' onclick="document.body.classList.toggle(\'ayuda-on\')">?</button>'
         "</header>"
     )
+    ayuda = AYUDA_SECCION.get(activa, "")
+    panel_ayuda = f'<div class="ayuda">{ayuda}</div>' if ayuda else ""
     return f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{meta}
 <link rel="icon" href="{favicon_data_uri()}">
 <title>{html.escape(titulo)} · {NOMBRE}</title><style>{_ESTILO}</style>{TEMA_SCRIPT}</head><body>
 <a href="#contenido" class="skip-link">Saltar al contenido</a>
 {barra}
-<main id="contenido">{cuerpo}</main></body></html>"""
+<main id="contenido">{panel_ayuda}{cuerpo}</main></body></html>"""
 
 
 # ------------------------------- render del menu -------------------------------

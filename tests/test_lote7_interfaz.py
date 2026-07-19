@@ -26,6 +26,13 @@ def test_toggle_de_tema_presente_en_toda_pagina(client):
     assert 'data-theme="dark"' in r.text  # override CSS presente
 
 
+def test_modo_ayuda_presente(client):
+    """El botón ❓ de la barra alterna body.ayuda-on y hay panel de ayuda por sección."""
+    r = client.get("/")
+    assert "ayuda-on" in r.text  # el onclick del botón de ayuda
+    assert 'class="ayuda"' in r.text  # panel de ayuda de la sección Menú
+
+
 def test_buscador_global(client):
     r = client.get("/buscar")
     assert r.status_code == 200
