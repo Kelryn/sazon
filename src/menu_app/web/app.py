@@ -1869,11 +1869,13 @@ function reescalarReceta() {{
         cuerpo += (
             '<div class="card"><div class="franja">Actualizaciones de la aplicación</div>'
             f'<p class="meta">Versión instalada: <b>{__version__}</b></p>'
-            '<form method="post" action="/config/canal" style="margin-bottom:10px">'
-            '<label>Canal <select name="canal" onchange="this.form.submit()">'
-            f'<option value="estable"{" selected" if canal_actual != "beta" else ""}>Estable</option>'
-            f'<option value="beta"{" selected" if canal_actual == "beta" else ""}>Beta (#77)</option>'
-            "</select></label></form>"
+            "<label>Canal</label>"
+            '<form method="post" action="/config/canal" class="seg" style="margin-bottom:10px">'
+            f'<button type="submit" name="canal" value="estable" '
+            f'class="{"on" if canal_actual != "beta" else ""}">Estable</button>'
+            f'<button type="submit" name="canal" value="beta" '
+            f'class="{"on" if canal_actual == "beta" else ""}">Beta</button>'
+            "</form>"
             '<form method="post" action="/actualizaciones/comprobar">'
             '<button class="btn" type="submit">Buscar actualización</button></form>'
             f"{estado_upd}"
