@@ -78,7 +78,9 @@ def test_importar_url_invalida_no_rompe(client):
 def test_matching_correcciones(client):
     r = client.get("/matching")
     assert r.status_code == 200
-    assert "Correcciones de matching" in r.text
+    # Rediseño Lote 11: franja "Correcciones" con métricas y tarjeta Emparejamientos.
+    assert "Correcciones" in r.text
+    assert "Emparejamientos" in r.text
     # Buscar producto para un ingrediente concreto no rompe.
     assert client.get("/matching?ing=azafran").status_code == 200
 
@@ -92,9 +94,10 @@ def test_carrito_enviar_sin_plan_no_rompe(client):
 def test_catalogo_page(client):
     r = client.get("/catalogo")
     assert r.status_code == 200
-    assert "Descargar / actualizar catálogo" in r.text
+    # Rediseño Lote 11: tarjetas "Actualizar" y "Catálogo".
+    assert ">Actualizar</div>" in r.text
     assert "Categorías a descargar" in r.text  # checkboxes de categorias
-    assert "Ver y corregir el catálogo" in r.text  # visor
+    assert ">Catálogo</span>" in r.text  # visor
     # Regresion: el boton de actualizar NO puede apuntar a /catalogo/actualizar
     # (chocaria con /catalogo/{producto_id} -> "Producto no encontrado").
     assert 'action="/catalogo-actualizar"' in r.text

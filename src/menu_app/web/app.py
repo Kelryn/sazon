@@ -1036,22 +1036,25 @@ function reescalarReceta() {{
             repo = MatchingRepository(conn)
             total, con = repo.contar_mapeos(), repo.contar_con_match()
             aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
+            # Métricas en tarjetitas (spec): Emparejados X/Y · Sin producto Z (rojo).
             cab = (
-                '<div class="card"><div class="franja">Correcciones de matching</div>'
-                f'<p class="meta">Emparejados <b>{con}</b>/{total} · '
-                f"sin producto: <b>{total - con}</b>. Asigna a mano los que falten para que "
-                "el menú pueda usar esas recetas.</p></div>"
+                '<div class="card"><div class="franja">Correcciones</div>'
+                '<div class="stat">'
+                f'<div class="b">Emparejados<b>{con} / {total}</b></div>'
+                f'<div class="b rojo">Sin producto<b>{total - con}</b></div></div>'
+                '<p class="meta" style="margin:10px 0 0">Asigna a mano los que falten para '
+                "que el menú pueda usar esas recetas.</p></div>"
             )
             n_descatalogados = len(productos_descatalogados(conn))
             if n_descatalogados:
                 cab += (
-                    '<div class="card"><div class="franja">Posibles descatalogados (#117)</div>'
-                    f'<p class="meta"><b>{n_descatalogados}</b> ingrediente(s) emparejados con un '
-                    "producto que no apareció en la última actualización del catálogo (puede que "
-                    "Alcampo lo haya dejado de vender).</p>"
+                    '<div class="card"><div class="franja">Posibles descatalogados</div>'
+                    f'<p class="meta" style="margin:0 0 10px"><b>{n_descatalogados}</b> '
+                    "ingrediente(s) emparejados con un producto que no apareció en la última "
+                    "actualización del catálogo (puede que Alcampo lo haya dejado de vender).</p>"
                     '<form method="post" action="/matching/rematch-descatalogados">'
-                    '<button class="btn sec" type="submit">Buscar sustituto automáticamente</button>'
-                    "</form></div>"
+                    '<button class="btn neu" type="submit">Buscar sustituto automáticamente'
+                    "</button></form></div>"
                 )
             if ing:
                 # Buscar productos candidatos para el ingrediente `ing`.
@@ -1078,42 +1081,76 @@ function reescalarReceta() {{
                     f'<input type="hidden" name="ing" value="{html.escape(ing)}">'
                     f'<input name="q" value="{html.escape(q)}" placeholder="buscar producto…" '
                     'style="max-width:320px"> <button class="btn sec" type="submit">Buscar</button>'
-                    ' <a class="btn sec" href="/matching">← volver a la lista</a></form>'
+                    ' <a class="btn neu" href="/matching">← volver a la lista</a></form>'
                     f"<table>{filas}</table></div>"
                 )
-                return _pagina("Correcciones", cuerpo)
-            # Lista de ingredientes sin match.
+                return _pagina("Correcciones", cuerpo, activa="catalogo", ayuda="matching")
+            # Tarjeta "Emparejamientos" (spec), COLAPSABLE: el ingrediente es un botón
+            # que abre en otra ventana una receta que lo usa; a la derecha, asignar.
             faltan = repo.sin_match(limite=200)
             filas = "".join(
-                f'<tr><td>{html.escape(i)}</td>'
-                f'<td style="text-align:right"><a class="btn mini" '
-                f'href="/matching?ing={html.escape(i)}">Buscar producto…</a></td></tr>'
+                f'<div class="frow"><a class="ing-btn" target="_blank" rel="noopener" '
+                f'href="/matching/receta-de?ing={quote(i)}">{html.escape(i)} ↗</a>'
+                f'<a class="buscar-prod" href="/matching?ing={quote(i)}">Buscar producto…</a>'
+                "</div>"
                 for i in faltan
-            ) or '<tr><td colspan="2">🎉 No hay ingredientes sin emparejar.</td></tr>'
-            # Editor de sinonimos (#22/#14).
+            ) or '<p class="meta" style="margin:8px 0 0">🎉 No hay ingredientes sin emparejar.</p>'
+            emparejamientos = (
+                '<div class="card">'
+                '<button class="card-head abierto" type="button" '
+                "onclick=\"var b=this.nextElementSibling;var on=b.style.display==='none';"
+                "b.style.display=on?'':'none';this.classList.toggle('abierto',on);\">"
+                '<span>Emparejamientos</span><span class="chev">▸</span></button>'
+                f"<div>{filas}</div></div>"
+            )
+            # Tarjeta "Sinónimos" (spec), COLAPSABLE; la nota explicativa vive en la ayuda ❓.
             sins = repo.sinonimos()
             filas_sin = "".join(
-                f'<tr><td>{html.escape(p)} → {html.escape(r)}</td>'
-                f'<td style="text-align:right"><form method="post" action="/matching/sinonimo/borrar">'
+                f"<div class='frow'><span>{html.escape(p)} → {html.escape(r)}</span>"
+                f'<form method="post" action="/matching/sinonimo/borrar" style="margin:0">'
                 f'<input type="hidden" name="palabra" value="{html.escape(p)}">'
-                f'<button class="btn mini sec" type="submit">Borrar</button></form></td></tr>'
+                f'<button class="borrar-suave" type="submit">Borrar</button></form></div>'
                 for p, r in sorted(sins.items())
-            ) or '<tr><td colspan="2">Sin sinónimos definidos.</td></tr>'
+            ) or '<p class="meta" style="margin:8px 0 0">Sin sinónimos definidos.</p>'
             editor = (
-                '<div class="card"><div class="franja">Sinónimos (aprender correcciones)</div>'
-                '<p class="note">Enseña al matcher que una palabra equivale a otra (p. ej. '
-                '«ajoporro → puerro»). Se aplican al volver a emparejar (Catálogo → actualizar, '
-                'o el comando de emparejado).</p>'
-                '<form method="post" action="/matching/sinonimo" class="row">'
-                '<div><label>Palabra</label><input name="palabra" placeholder="ajoporro"></div>'
-                '<div><label>Equivale a</label><input name="reemplazo" placeholder="puerro"></div>'
-                '<div style="align-self:end"><button class="btn" type="submit">Añadir</button></div>'
-                f'</form><table>{filas_sin}</table></div>'
+                '<div class="card">'
+                '<button class="card-head abierto" type="button" '
+                "onclick=\"var b=this.nextElementSibling;var on=b.style.display==='none';"
+                "b.style.display=on?'':'none';this.classList.toggle('abierto',on);\">"
+                '<span>Sinónimos</span><span class="chev">▸</span></button>'
+                "<div>"
+                '<form method="post" action="/matching/sinonimo" '
+                'style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">'
+                '<div style="flex:1;min-width:120px"><label>Palabra</label>'
+                '<input name="palabra" placeholder="ajoporro"></div>'
+                '<div style="flex:1;min-width:120px"><label>Equivale a</label>'
+                '<input name="reemplazo" placeholder="puerro"></div>'
+                '<button class="btn sec" type="submit">Añadir</button></form>'
+                f"{filas_sin}</div></div>"
             )
-            cuerpo = aviso + cab + f'<div class="card"><table>{filas}</table></div>' + editor
-            return _pagina("Correcciones", cuerpo)
+            cuerpo = aviso + cab + emparejamientos + editor
+            return _pagina("Correcciones", cuerpo, activa="catalogo", ayuda="matching")
         finally:
             conn.close()
+
+    @app.get("/matching/receta-de")
+    def matching_receta_de(ing: str = ""):
+        """Abre una receta que usa el ingrediente (para revisarla sin salir de
+        Correcciones: el enlace se abre en otra ventana)."""
+        conn, _ = _conn()
+        try:
+            fila = conn.execute(
+                "SELECT receta_id FROM receta_ingredientes WHERE nombre_normalizado = ? "
+                "LIMIT 1", (ing.strip(),),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not fila:
+            return RedirectResponse(
+                "/matching?msg=" + quote(f"No encontré recetas que usen «{ing}»."),
+                status_code=303,
+            )
+        return RedirectResponse(f"/receta/{quote(fila['receta_id'])}", status_code=303)
 
     @app.post("/matching/asignar")
     async def matching_asignar(ing: str = Form(""), rid: str = Form("")):
@@ -1316,63 +1353,82 @@ function reescalarReceta() {{
             f'{"checked" if cid in seleccionadas else ""}> {html.escape(nombre)}</label>'
             for cid, nombre in FOOD_CATEGORY_ROOTS.items()
         )
+        # Tarjeta "Actualizar" (spec): botones Actualizar (verde) y Revisar (crema
+        # discreto) del MISMO tamaño (128px); la nota explicativa vive en la ayuda ❓.
         actualizar_card = (
-            f'<div class="card"><div class="franja">Descargar / actualizar catálogo</div>'
-            f'<p>Productos en la base de datos: <b>{fila["n"]}</b> · '
-            f'<span class="meta">Última actualización: {html.escape(str(fila["f"] or "nunca"))}</span></p>'
+            f'<div class="card" style="padding-bottom:12px"><div class="franja">Actualizar</div>'
+            f'<p style="margin:0 0 12px;font-size:13px">Productos en la base de datos: '
+            f'<b>{fila["n"]}</b> · <span class="meta">Última actualización: '
+            f'{html.escape(str(fila["f"] or "nunca"))}</span></p>'
             + (
                 ""
                 if activa
-                else f'<form method="post" action="/catalogo-actualizar">'
-                f"<label>Categorías a descargar/actualizar:</label>"
-                f'<div style="margin:6px 0">{cats}</div>'
-                f'<button class="btn" type="submit">Actualizar seleccionadas</button></form>'
+                else f'<form method="post" action="/catalogo-actualizar" style="margin:0">'
+                f"<label style='margin-top:0'>Categorías a descargar / actualizar:</label>"
+                f'<div style="margin:6px 0 12px">{cats}</div>'
+                '<div style="display:flex;gap:10px">'
+                '<button class="btn" style="width:128px" type="submit">Actualizar</button>'
+                '<a class="btn rev" style="width:128px" href="/catalogo/validar" '
+                'title="Revisar datos anómalos">Revisar</a></div></form>'
             )
             + estado
-            + '<p class="meta">Refresca precios, ofertas y productos nuevos de las categorías '
-            "marcadas. Va a ritmo lento para no saturar la web; puedes seguir usando la app.</p>"
-            '<p><a class="receta" href="/catalogo/validar">🔍 Revisar datos anómalos (#120)</a></p>'
-            "</div>"
+            + "</div>"
         )
 
-        # Visor/editor del catalogo.
+        # Tarjeta "Catálogo" (spec): encabezado gris del mismo alto, filas alternas,
+        # ✓ verde, paginación centrada, y accesos Buscar/Correcciones de 118×32.
         filas = ""
         for p in prods:
-            apto = "✓" if p["apto_receta"] else "—"
-            precio = f'{p["precio_eur"]:.2f} €' if p["precio_eur"] is not None else "—"
+            apto = '<span class="apto-si">✓</span>' if p["apto_receta"] else "–"
+            precio = f'{p["precio_eur"]:.2f} €' if p["precio_eur"] is not None else "–"
             nut = "sí" if p["energia_kcal_100g"] is not None else "no"
             filas += (
-                f'<tr><td>{html.escape(p["nombre"][:55])}</td><td>{precio}</td>'
+                f'<tr><td>{html.escape(p["nombre"][:55])}</td>'
+                f'<td style="text-align:center">{precio}</td>'
                 f'<td style="text-align:center">{apto}</td><td style="text-align:center">{nut}</td>'
-                f'<td><a class="btn mini sec" href="/catalogo/{html.escape(p["retailer_product_id"])}">'
+                f'<td style="text-align:center">'
+                f'<a class="btn mini sec" href="/catalogo/{html.escape(p["retailer_product_id"])}">'
                 f"Editar</a></td></tr>"
             )
         n_pags = max(1, -(-total // por_pagina))
         base = f"/catalogo?q={html.escape(q)}&solo_aptos={solo_aptos}"
         nav = (
-            (f'<a class="btn mini" href="{base}&pagina={pagina-1}">◀</a> ' if pagina > 1 else "")
+            (
+                f'<a class="btn neu mini" href="{base}&pagina={pagina-1}" '
+                'aria-label="Página anterior">◀</a>' if pagina > 1 else ""
+            )
             + f'<span class="meta">Página {pagina}/{n_pags} ({total} productos)</span>'
-            + (f' <a class="btn mini" href="{base}&pagina={pagina+1}">▶</a>' if pagina < n_pags else "")
+            + (
+                f'<a class="btn neu mini" href="{base}&pagina={pagina+1}" '
+                'aria-label="Página siguiente">▶</a>' if pagina < n_pags else ""
+            )
         )
         visor = (
             '<div class="card">'
             '<div class="franja" style="display:flex;justify-content:space-between;'
             'align-items:center;gap:10px">'
-            '<span>Ver y corregir el catálogo</span>'
+            "<span>Catálogo</span>"
             '<span style="display:flex;gap:8px">'
-            '<a class="btn neu mini" href="/buscar" style="min-width:96px" '
+            '<a class="btn neu mini acc118" href="/buscar" '
             'title="Buscar recetas o productos">Buscar</a>'
-            '<a class="btn neu mini" href="/matching" style="min-width:96px" '
+            '<a class="btn neu mini acc118" href="/matching" '
             'title="Emparejar ingredientes sin producto">Correcciones</a>'
-            '</span></div>'
-            f'<form method="get" action="/catalogo" style="margin-bottom:8px">'
+            "</span></div>"
+            f'<form method="get" action="/catalogo" '
+            'style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap">'
             f'<input name="q" value="{html.escape(q)}" placeholder="Buscar producto…" '
-            f'style="max-width:60%;display:inline-block;width:auto">'
-            f'<label style="display:inline-flex;gap:5px;margin-left:10px">'
-            f'<input type="checkbox" name="solo_aptos" value="1" style="width:auto" '
-            f'{"checked" if solo_aptos else ""}> solo aptos</label></form>'
-            f"<table><tr><th>Producto</th><th>Precio</th><th>Apto</th><th>Nutric.</th><th></th></tr>"
-            f"{filas}</table><div style='margin-top:8px'>{nav}</div></div>"
+            'style="flex:1;min-width:180px">'
+            '<label style="display:inline-flex;gap:6px;align-items:center;margin:0">'
+            f'<input type="checkbox" name="solo_aptos" value="1" '
+            f'{"checked" if solo_aptos else ""} onchange="this.form.submit()"> Aptos</label>'
+            "</form>"
+            '<div class="tabla-bleed"><table class="cat-tabla">'
+            "<tr><th>Producto</th><th style='text-align:center'>Precio</th>"
+            "<th style='text-align:center'>Apto</th><th style='text-align:center'>Nutric.</th>"
+            "<th></th></tr>"
+            f"{filas}</table></div>"
+            '<div style="display:flex;justify-content:center;align-items:center;gap:10px;'
+            f'margin-top:12px">{nav}</div></div>'
         )
         aviso = f'<div class="card ok">{html.escape(msg)}</div>' if msg else ""
         return _pagina(

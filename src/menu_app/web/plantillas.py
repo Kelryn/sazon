@@ -166,6 +166,20 @@ button.card-plegar:hover .chev { color: #5b5748; }
 .btn.neu { background: var(--neutro-bg); color: #4a4636; }
 .btn.neu:hover { background: var(--neutro-bg-h); }
 .btn.mini { padding: 5px 11px; font-size: 12px; }
+.btn.rev { background: #f4f2ec; color: var(--muted); }
+.btn.rev:hover { background: #ece9dd; }
+:root[data-theme="dark"] .btn.rev { background: var(--neutro-bg); }
+:root[data-theme="dark"] .btn.rev:hover { background: var(--neutro-bg-h); }
+.btn.acc118 { width: 118px; height: 32px; padding: 0; }
+/* Tabla que llega a los bordes de la tarjeta, con encabezado gris (catalogo). */
+.tabla-bleed { margin: 0 -18px; }
+.tabla-bleed th:first-child, .tabla-bleed td:first-child { padding-left: 18px; }
+.tabla-bleed th:last-child, .tabla-bleed td:last-child { padding-right: 18px; }
+table.cat-tabla th { background: var(--thead-bg); color: var(--thead-texto);
+  border-bottom: 1px solid var(--thead-borde); }
+table.cat-tabla td { border-bottom: none; }
+table.cat-tabla tr:nth-child(odd) td { background: var(--fila-alt); }
+.apto-si { color: #4d7a3a; font-weight: 700; }
 /* Control segmentado (p. ej. tema Claro/Oscuro/Sistema): activo verde, resto apagado. */
 .seg { display: inline-flex; gap: 4px; background: var(--neutro-bg); padding: 4px; border-radius: 9px; }
 .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
@@ -212,6 +226,51 @@ a.h-row:hover, a.h-row:nth-of-type(even):hover { background: var(--hover-fila); 
   background: var(--hover-fila); color: var(--verde); font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center; }
 .alt-fila:hover .n { background: #dbe7cf; }
+/* Correcciones: tarjetitas de métricas, tarjetas colapsables y filas de trabajo. */
+.stat { display: flex; gap: 18px; flex-wrap: wrap; }
+.stat .b { background: #f6f5f0; border-radius: 8px; padding: 8px 12px; font-size: 12px;
+  color: #5b5748; }
+.stat .b b { display: block; font-size: 15px; color: var(--text); }
+.stat .b.rojo b { color: var(--terracota); }
+button.card-head { display: flex; width: 100%; align-items: center;
+  justify-content: space-between; background: transparent; border: 0; padding: 0 0 11px;
+  margin: 0 0 11px; border-bottom: 1px solid var(--border); font: inherit; font-size: 15px;
+  font-weight: 700; color: var(--verde-osc); cursor: pointer; }
+button.card-head .chev { color: #a8a08a; font-size: 12px; transition: transform .15s; }
+button.card-head.abierto .chev { transform: rotate(90deg); }
+.frow { display: flex; justify-content: space-between; align-items: center; margin: 0 -18px;
+  padding: 9px 18px; border-bottom: 1px solid var(--neutro-bg); font-size: 13px;
+  color: var(--text); transition: background-color .15s; }
+.frow:last-child { border-bottom: none; }
+.frow:hover { background: var(--fila-alt); }
+a.ing-btn { display: inline-flex; align-items: center; gap: 6px; background: #f3f6ec;
+  color: var(--verde-osc); border-radius: 6px; padding: 6px 11px; font-size: 13px;
+  text-decoration: none; transition: background-color .15s; }
+a.ing-btn:hover { background: #e2ecd4; }
+a.buscar-prod { background: var(--hover-fila); color: var(--verde-osc); border: 0;
+  border-radius: 6px; padding: 5px 11px; font-size: 11px; font-weight: 600; cursor: pointer;
+  text-decoration: none; white-space: nowrap; transition: background-color .15s; }
+a.buscar-prod:hover { background: #dbe7cf; }
+button.borrar-suave { background: #f4f2ec; color: var(--muted); border: 0; border-radius: 6px;
+  padding: 5px 11px; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: background-color .15s, color .15s; }
+button.borrar-suave:hover { background: #f7e4e0; color: var(--terracota); }
+/* Modo oscuro de los elementos con color fijo de esta zona. */
+:root[data-theme="dark"] .stat .b, :root[data-theme="dark"] button.borrar-suave {
+  background: var(--neutro-bg); color: var(--muted); }
+:root[data-theme="dark"] a.ing-btn { background: var(--chip-bg); color: var(--chip-text); }
+:root[data-theme="dark"] a.ing-btn:hover, :root[data-theme="dark"] a.buscar-prod:hover,
+:root[data-theme="dark"] .alt-fila:hover .n { background: var(--sec-bg); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .stat .b,
+  :root:not([data-theme="light"]) button.borrar-suave {
+    background: var(--neutro-bg); color: var(--muted); }
+  :root:not([data-theme="light"]) a.ing-btn {
+    background: var(--chip-bg); color: var(--chip-text); }
+  :root:not([data-theme="light"]) a.ing-btn:hover,
+  :root:not([data-theme="light"]) a.buscar-prod:hover,
+  :root:not([data-theme="light"]) .alt-fila:hover .n { background: var(--sec-bg); }
+}
 input, textarea, select { width: 100%; padding: 8px 10px; border: 1px solid var(--border);
   border-radius: 8px; font: inherit; font-size: 13px; background: var(--bg); color: var(--text); }
 input:hover, input:focus, textarea:hover, textarea:focus, select:hover, select:focus {
@@ -317,6 +376,14 @@ AYUDA_SECCION = {
         "<b>Buscar.</b> Búsqueda global: recetas por título y productos del catálogo por "
         "nombre. Pulsa una receta para abrir su ficha, o un producto para ver y corregir "
         "sus datos."
+    ),
+    "matching": (
+        "<b>Correcciones.</b> Ingredientes de receta sin producto de Alcampo asignado: "
+        "mientras falten, esas recetas no pueden entrar en el menú. Pulsa el ingrediente "
+        "para abrir (en otra ventana) una receta que lo usa, o «Buscar producto…» para "
+        "asignarle un producto a mano. En «Sinónimos» enseñas al emparejador que una "
+        "palabra equivale a otra (p. ej. ajoporro → puerro); se aplican al volver a "
+        "emparejar."
     ),
 }
 
