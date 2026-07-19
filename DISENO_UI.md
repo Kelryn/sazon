@@ -614,14 +614,23 @@ El resto de secciones se acceden con botones dentro de otras pantallas: Historia
 (desde Menú), Sustituciones (desde Recetas), Correcciones y Buscar (desde
 Catálogo). El tema día/noche está en Configuración → Apariencia.
 
-### Pendiente para la fase de implementación
-- Implementar en el código real (`web/app.py`, `web/plantillas.py`), **sin CDN**
-  (todo embebido) para que siga empaquetando a `.exe`.
-- **Modo ayuda ❓** por pantalla, con textos editables en `.md` (recoger aquí
-  todos los textos que se han ido "moviendo a ayuda").
-- **Flag `es_desayuno`** en el editor de receta (columna + migración + guardado +
-  uso en el solver para la columna Desayuno del menú).
-- **Selectores de valoración** (ingredientes/métodos): definir las listas de
-  opciones (ver ROADMAP).
-- Decidir si se conserva **Dashboard**.
-- Revisión final + guía de estilo, y cierre de lote (versión, tests, commit, tag).
+### Estado de la implementación (v0.18.0)
+
+**Implementado en el código real** (auditoría completa contra este documento,
+fases 1–8): paleta y tokens, barra de herramientas, accesos en página, y las 12
+pantallas (Menú con fila de acciones/tintes/nutrientes plegable; Recetas,
+Buscar, Sustituciones, Historial con drag&drop; Correcciones colapsable con
+ingrediente-botón; Catálogo; Detalle de receta con raciones −/+ y
+producto-botón; Lista de la compra en tabla con casillas/cambios de precio;
+Valoraciones con estrellas y selectores ±; Editor con preparación persistida y
+flag `es_desayuno` (esquema v6); Configuración con menú lateral, grupos
+colapsables, switches, círculos de día y stepper). Modo ayuda ❓ por pantalla.
+
+### Pendiente
+- **Columna Desayuno** en la tabla del menú: usar `es_desayuno` en el
+  optimizador (el flag ya se guarda; falta el solver y la 4ª columna).
+- **Textos de ayuda editables en `.md`** (hoy viven en `AYUDA_SECCION` de
+  `plantillas.py`; falta el cargador externo + empaquetado).
+- **Modo ayuda con globos** sobre cada control (hoy es un panel por pantalla).
+- Curar las listas de **métodos de preparación** de valoraciones.
+- Decidir si se conserva **Dashboard** (sin acceso desde la UI nueva).
