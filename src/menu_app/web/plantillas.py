@@ -223,6 +223,81 @@ table.cat-tabla tr:nth-child(odd) td { background: var(--fila-alt); }
   :root:not([data-theme="light"]) .lc-fila:hover { background: var(--hover-fila); }
   :root:not([data-theme="light"]) .lc-total-fila { border-top-color: var(--text); }
 }
+/* Configuración (spec Lote 11): menú lateral + controles propios. */
+.cfg-layout { display: flex; gap: 14px; align-items: flex-start; }
+.cfg-menu { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 2px;
+  width: 186px; flex: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radio); padding: 8px; }
+.cfg-menu button { text-align: left; background: transparent; border: 0; border-radius: 7px;
+  padding: 9px 12px; font: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+  transition: background-color .15s; }
+.cfg-menu button:hover { background: #f2efe4; }
+.cfg-menu button.on, .cfg-menu button.on:hover { background: var(--hover-fila);
+  color: var(--verde-osc); font-weight: 700; }
+.cfg-cont { flex: 1; min-width: 0; }
+.cfg-sec { display: none; } .cfg-sec.on { display: block; }
+@media (max-width: 640px) { .cfg-layout { flex-direction: column; }
+  .cfg-menu { position: static; width: 100%; flex-direction: row; flex-wrap: wrap; } }
+/* Grupos colapsables de la sección Menú (empiezan cerrados). */
+.grupo { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px;
+  overflow: hidden; }
+.grupo > button.g-head { display: flex; width: 100%; justify-content: space-between;
+  align-items: center; background: transparent; border: 0; padding: 11px 14px; font: inherit;
+  font-size: 13px; font-weight: 700; color: var(--verde-osc); cursor: pointer;
+  transition: background-color .15s; }
+.grupo > button.g-head:hover { background: var(--plegar-h); }
+.grupo > button.g-head .chev { color: #a8a08a; font-size: 11px; transition: transform .15s; }
+.grupo.abierto > button.g-head .chev { transform: rotate(90deg); }
+.grupo .g-body { padding: 2px 14px 12px; display: none; }
+.grupo.abierto .g-body { display: block; }
+.g-sub { font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--muted); font-weight: 700; margin: 12px 0 0; }
+/* Interruptor (switch). */
+.switch { position: relative; display: inline-flex; width: 38px; height: 22px; flex: none; }
+.switch input[type=checkbox] { position: absolute; inset: 0; width: 100% !important;
+  height: 100% !important; opacity: 0; margin: 0; cursor: pointer; border: 0; }
+.switch .tk { position: absolute; inset: 0; background: #d7dccd; border-radius: 11px;
+  transition: background-color .15s; pointer-events: none; }
+.switch .tk::before { content: ""; position: absolute; top: 3px; left: 3px; width: 16px;
+  height: 16px; background: #fff; border-radius: 50%; transition: transform .15s;
+  box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.switch input:checked + .tk { background: var(--verde-accion); }
+.switch input:checked + .tk::before { transform: translateX(16px); }
+/* Círculos de día (batchcooking): letra L M X J V S D, verde al activar. */
+.dias-bc { display: flex; gap: 8px; margin: 8px 0 2px; }
+.dia-circ { position: relative; width: 34px; height: 34px; }
+.dia-circ input[type=checkbox] { position: absolute; inset: 0; width: 100% !important;
+  height: 100% !important; opacity: 0; margin: 0; cursor: pointer; border: 0; }
+.dia-circ span { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; border-radius: 50%; background: var(--neutro-bg);
+  color: var(--muted); font-size: 12px; font-weight: 700; pointer-events: none;
+  transition: background-color .15s, color .15s; }
+.dia-circ input:hover + span { background: var(--sec-bg); }
+.dia-circ input:checked + span { background: var(--verde-accion); color: #fff; }
+.dia-circ input:checked:hover + span { background: var(--verde-accion-h); }
+/* Stepper numérico: campo sin flechitas nativas + botones − / +. */
+.stepper { display: inline-flex; align-items: center; gap: 8px; }
+.stepper input { width: 46px !important; height: 34px; text-align: center;
+  appearance: textfield; -moz-appearance: textfield; }
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper .rac-btn { width: 22px; height: 22px; }
+.stepper .rac-btn svg { width: 10px; height: 10px; }
+/* Filas del mismo alto (Actualizaciones, Catálogo programado). */
+.cfg-fila { display: flex; justify-content: space-between; align-items: center; height: 50px;
+  border-bottom: 1px solid var(--neutro-bg); font-size: 13px; color: var(--text); gap: 10px; }
+.cfg-fila:last-of-type { border-bottom: none; }
+.seg.w170 { width: 170px; padding: 3px; gap: 3px; }
+.seg.w170 button { flex: 1; height: 28px; padding: 0; }
+.btn.w170 { width: 170px; height: 34px; padding: 0; }
+.cfg-res { background: var(--hover-fila); border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; color: var(--verde-osc); margin: 10px 0 0; }
+:root[data-theme="dark"] .cfg-menu button:hover { background: var(--neutro-bg); }
+:root[data-theme="dark"] .switch .tk { background: #3a4230; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cfg-menu button:hover { background: var(--neutro-bg); }
+  :root:not([data-theme="light"]) .switch .tk { background: #3a4230; }
+}
 /* Editor de receta (spec Lote 11). */
 .ing-fila { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
 .ing-fila input[name=ing_nombre] { flex: 1; height: 38px; }
@@ -510,6 +585,19 @@ AYUDA_SECCION = {
         "<b>Buscar.</b> Búsqueda global: recetas por título y productos del catálogo por "
         "nombre. Pulsa una receta para abrir su ficha, o un producto para ver y corregir "
         "sus datos."
+    ),
+    "config": (
+        "<b>Configuración.</b> En «Menú» ajustas hogar, energía, planificación, "
+        "exclusiones, los pesos del optimizador y los días de batchcooking; los cambios se "
+        "guardan en config.usuario.yaml (borra ese fichero para volver a los valores base). "
+        "«Perfil y calorías» puede calcular tus kcal diarias con la fórmula Mifflin-St Jeor "
+        "a partir de peso, altura, edad, sexo y actividad: si activas «Calcular», sustituye "
+        "al valor fijo de kcal. En «Actualizaciones», el canal Beta también ofrece "
+        "versiones de prueba; al encontrar una nueva se descarga en 2º plano, se verifica "
+        "su integridad y se abre el instalador. Las «Copias de seguridad» se crean solas al "
+        "arrancar (se conservan 10) y restaurar guarda antes el estado actual. El «Catálogo "
+        "programado» avisa cuando el catálogo envejece y puede refrescarlo solo (lento: usa "
+        "la web de Alcampo). El diagnóstico de errores es 100% local."
     ),
     "editor": (
         "<b>Editor de receta.</b> Escribe para buscar cada ingrediente en el catálogo de "

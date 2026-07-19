@@ -45,8 +45,10 @@ def test_compra_sin_plan(client):
 def test_config_muestra_actualizaciones(client):
     r = client.get("/config")
     assert r.status_code == 200
-    assert "Actualizaciones de la aplicación" in r.text
+    # Rediseño Lote 11: sección "Actualizaciones" del menú lateral de Configuración.
+    assert ">Actualizaciones</div>" in r.text
     assert "Versión instalada" in r.text
+    assert "Buscar actualización" in r.text
 
 
 def test_actualizaciones_solo_boton(client, monkeypatch):

@@ -1938,35 +1938,42 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
                 f'<p class="note">{nota}</p></div>'
             )
 
-        casillas = "".join(
-            f'<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px">'
-            f'<input type="checkbox" name="dias_bc" value="{d}" style="width:auto" '
-            f'{"checked" if d in dias_marcados else ""}> {_NOMBRE_DIA[d]}</label>'
+        # Días batchcooking como CÍRCULOS de una letra (spec): verde al activar.
+        letras_dia = {
+            "lun": "L", "mar": "M", "mie": "X", "jue": "J", "vie": "V", "sab": "S", "dom": "D",
+        }
+        circulos = "".join(
+            f'<label class="dia-circ" title="{_NOMBRE_DIA[d]}">'
+            f'<input type="checkbox" name="dias_bc" value="{d}" '
+            f'{"checked" if d in dias_marcados else ""}>'
+            f"<span>{letras_dia[d]}</span></label>"
             for d in DIAS_SEMANA
         )
-        cuerpo = (
-            aviso
-            + '<div class="card"><div class="franja">Configuración del menú</div>'
-            '<form method="post" action="/config">'
-            '<div class="row">'
+
+        def _grupo(titulo: str, contenido: str) -> str:
+            """Grupo colapsable de la sección Menú (spec: empiezan CERRADOS)."""
+            return (
+                '<div class="grupo">'
+                '<button class="g-head" type="button" '
+                "onclick=\"this.parentElement.classList.toggle('abierto')\">"
+                f'<span>{titulo}</span><span class="chev">▸</span></button>'
+                f'<div class="g-body">{contenido}</div></div>'
+            )
+        # --- Sección "Menú" (spec): 4 grupos colapsables con subgrupos ---
+        g_general = (
+            '<div class="g-sub">Hogar</div><div class="row">'
             + _num("num_comensales", "Comensales", int(cfg.get("num_comensales", 2)),
                    "Cuántas personas comen de cada receta.", "1", "1")
-            + _num("ninos", "…de los cuales, niños (#108)", int(cfg.get("ninos", 0) or 0),
-                   "Comen una fracción de ración de adulto (ver abajo). 0 = todos adultos.",
+            + _num("ninos", "…de los cuales, niños", int(cfg.get("ninos", 0) or 0),
+                   "Comen una fracción de ración de adulto. 0 = todos adultos.",
                    "1", "0")
             + _num("factor_racion_infantil", "Ración infantil (%)",
                    round(float(cfg.get("factor_racion_infantil", 0.6)) * 100),
                    "Qué fracción de una ración de adulto come un niño.", "5", "0")
+            + '</div><div class="g-sub">Energía y raciones</div><div class="row">'
             + _num("kcal_por_comensal", "kcal por persona y día",
                    int(cfg.get("kcal_por_comensal", 2000)),
                    "Energía diaria objetivo. El menú cubre la parte de comida y cena.", "50", "1000")
-            + _num("semanas_plan", "Semanas a planificar", int(cfg.get("semanas_plan", 1)),
-                   "Cuántas semanas de menú se generan de una vez.", "1", "1")
-            + "</div><div class='row'>"
-            + _num("dias_repeticion", "Días entre repeticiones",
-                   int(cfg.get("dias_repeticion", 7)),
-                   "Cada cuántos días puede volver a comerse la misma receta "
-                   "(7 = no se repite en la semana; 14 = tampoco a la siguiente).", "1", "1")
             + _num("racion_frac_min", "Ración mínima (%)",
                    round(float(cfg.get("racion_frac_min", 0.75)) * 100),
                    "Porción más pequeña que aceptas en una comida, en % de una ración "
@@ -1975,16 +1982,30 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
                    round(float(cfg.get("racion_frac_max", 1.25)) * 100),
                    "Porción más grande, en % de una ración (125 = ración y cuarto). "
                    "Puede ser mayor de 100.", "5", "50")
-            + "</div><div class='row'>"
+            + '</div><div class="g-sub">Planificación</div><div class="row">'
+            + _num("semanas_plan", "Semanas a planificar", int(cfg.get("semanas_plan", 1)),
+                   "Cuántas semanas de menú se generan de una vez.", "1", "1")
+            + _num("dias_repeticion", "Días entre repeticiones",
+                   int(cfg.get("dias_repeticion", 7)),
+                   "Cada cuántos días puede volver a comerse la misma receta "
+                   "(7 = no se repite en la semana; 14 = tampoco a la siguiente).", "1", "1")
+            + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
+                   int(cfg.get("tiempo_max_receta_min", 0) or 0),
+                   "Descarta recetas que tarden más de estos minutos (0 = sin límite).",
+                   "5", "0")
+            + '</div><div class="g-sub">Presupuesto</div><div class="row">'
             + _num("presupuesto_max_semana", "Presupuesto máx./semana (€)",
                    round(float(cfg.get("presupuesto_max_semana", 0) or 0)),
                    "Tope de gasto semanal. 0 = sin tope. Si es muy bajo puede no haber "
                    "menú posible sin saltarse los nutrientes.", "5", "0")
-            + _num("presupuesto_max_por_comensal_semana", "…o por comensal (€) (#113)",
+            + _num("presupuesto_max_por_comensal_semana", "…o por comensal (€)",
                    round(float(cfg.get("presupuesto_max_por_comensal_semana", 0) or 0)),
                    "Si es >0, manda sobre el de arriba y se multiplica por el nº de "
-                   "comensales (el tope se ajusta solo si cambia el tamaño del hogar). "
-                   "0 = usar el presupuesto por semana.", "1", "0")
+                   "comensales. 0 = usar el presupuesto por semana.", "1", "0")
+            + "</div>"
+        )
+        g_exclusiones = (
+            '<div class="row">'
             + (
                 '<div style="flex:2 1 320px"><label>Ingredientes que NO quieres</label>'
                 '<input name="ingredientes_excluidos" '
@@ -2017,7 +2038,10 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
                 '"Cocinar con la despensa" está por encima de 0 %, se priorizan recetas que lo '
                 "usen (#97).</p></div>"
             )
-            + "</div><div class='row'>"
+            + "</div>"
+        )
+        g_intereses = (
+            '<div class="row">'
             + _slider("sabor_pct", "Peso del sabor", _pct(cfg, "sabor_pct"),
                       "0 % = solo importa el precio; 100 % = manda el sabor (recetas mejor "
                       "valoradas) frente a que sean baratas.")
@@ -2056,29 +2080,33 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
                       _pct(cfg, "festivo_pct"),
                       "Premia recetas cuyo título encaja con la época del año (Navidad en "
                       "diciembre; barbacoa/platos fríos en verano). 0 % = desactivado.")
-            + "</div><div class='row'>"
-            + _num("tiempo_max_receta_min", "Tiempo máx. de receta (min)",
-                   int(cfg.get("tiempo_max_receta_min", 0) or 0),
-                   "Descarta recetas que tarden más de estos minutos (0 = sin límite). "
-                   "Útil para entre semana.", "5", "0")
             + "</div>"
-            "<label>Días batchcooking (laborales: plato único en tanda para llevar)</label>"
-            f'<div style="margin:6px 0 4px">{casillas}</div>'
+        )
+        g_batchcooking = (
+            f'<div class="dias-bc">{circulos}</div>'
             '<p class="note">Esos días la comida sale solo de recetas que aguantan bien '
-            "cocinadas en tanda y transportadas (guisos, arroces, ensaladas con aliño aparte…), "
-            "y es un plato único sin postre.</p>"
-            '<div style="margin-top:14px"><button class="btn" type="submit">Guardar</button></div>'
-            "</form>"
-            '<p class="meta">Los cambios se guardan en <code>config.usuario.yaml</code> '
-            "(no tocan config.yaml); borra ese fichero para volver a los valores base.</p></div>"
+            "cocinadas en tanda y transportadas (guisos, arroces, ensaladas con aliño "
+            "aparte…), y es un plato único sin postre.</p>"
+        )
+        sec_menu = (
+            '<div class="card"><div class="franja">Configuración del menú</div>'
+            '<form method="post" action="/config">'
+            + _grupo("Configuración general", g_general)
+            + _grupo("Exclusiones", g_exclusiones)
+            + _grupo("Intereses", g_intereses)
+            + _grupo("Batchcooking", g_batchcooking)
+            + '<div style="margin-top:4px"><button class="btn" type="submit">Guardar</button>'
+            "</div></form></div>"
         )
         # --- Perfil corporal: calcular kcal automaticamente (#4/#5) ---
         perfil = cfg.get("perfil", {}) or {}
         auto = bool(perfil.get("calcular_kcal_auto"))
         from ..optimizacion.servicio import kcal_desde_perfil as _kcal_perfil
         kcal_calc = _kcal_perfil(perfil)
+        # Resultado en recuadro verde suave (spec); la explicación Mifflin-St Jeor
+        # vive en el modo ayuda ❓.
         estado_kcal = (
-            f'<p class="ok">Con este perfil: <b>{kcal_calc:.0f} kcal/día</b>.</p>'
+            f'<p class="cfg-res">Con este perfil: <b>{kcal_calc:.0f} kcal/día</b>.</p>'
             if kcal_calc else '<p class="note">Completa los datos para calcular las kcal.</p>'
         )
 
@@ -2089,13 +2117,16 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
             )
             return f'<div><label>{etiqueta}</label><select name="{nombre}">{ops}</select></div>'
 
-        cuerpo += (
+        sec_perfil = (
             '<div class="card"><div class="franja">Perfil y calorías</div>'
-            '<form method="post" action="/config/perfil"><div class="row">'
-            '<div><label style="display:inline-flex;align-items:center;gap:6px">'
-            f'<input type="checkbox" name="calcular_kcal_auto" value="1" style="width:auto" '
-            f'{"checked" if auto else ""}> Calcular kcal automáticamente</label>'
-            '<p class="note">Si lo activas, las kcal salen de tu perfil (Mifflin-St Jeor).</p></div>'
+            '<form method="post" action="/config/perfil">'
+            # Interruptor "Calcular" (spec, switch opción A) arriba del todo.
+            '<div style="display:flex;justify-content:space-between;align-items:center;'
+            'gap:10px;margin-bottom:4px">'
+            '<span style="font-size:13px">Calcular kcal automáticamente</span>'
+            '<label class="switch"><input type="checkbox" name="calcular_kcal_auto" '
+            f'value="1" {"checked" if auto else ""}><span class="tk"></span></label></div>'
+            '<div class="g-sub">Tus datos</div><div class="row">'
             + _num("peso_kg", "Peso (kg)", int(perfil.get("peso_kg", 70)), "", "1", "20")
             + _num("altura_cm", "Altura (cm)", int(perfil.get("altura_cm", 175)), "", "1", "100")
             + _num("edad", "Edad", int(perfil.get("edad", 30)), "", "1", "10")
@@ -2109,7 +2140,7 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
                 perfil.get("objetivo", "mantener"))
             + "</div>"
             + estado_kcal
-            + '<div style="margin-top:10px"><button class="btn" type="submit">Guardar perfil</button></div>'
+            + '<div style="margin-top:12px"><button class="btn" type="submit">Guardar perfil</button></div>'
             "</form></div>"
         )
         # --- Actualizaciones (Fase 11): un solo boton, repo fijo, instala solo ---
@@ -2129,71 +2160,92 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
             estado_upd = f'<p class="meta">Estás en la última versión (v{__version__}).</p>'
         else:
             estado_upd = '<p class="meta">Pulsa el botón para comprobar si hay una versión nueva.</p>'
-        cuerpo += (
-            '<div class="card"><div class="franja">Actualizaciones de la aplicación</div>'
-            f'<p class="meta">Versión instalada: <b>{__version__}</b></p>'
-            "<label>Canal</label>"
-            '<form method="post" action="/config/canal" class="seg" style="margin-bottom:10px">'
+        # Spec: 3 filas del mismo alto (50px); Estable+Beta juntos ocupan lo mismo
+        # (170px) que «Buscar actualización» (34px de alto); notas al modo ayuda ❓.
+        sec_act = (
+            '<div class="card"><div class="franja">Actualizaciones</div>'
+            '<div class="cfg-fila"><span>Versión instalada</span>'
+            f"<b>{__version__}</b></div>"
+            '<div class="cfg-fila"><span>Canal</span>'
+            '<form method="post" action="/config/canal" class="seg w170">'
             f'<button type="submit" name="canal" value="estable" '
             f'class="{"on" if canal_actual != "beta" else ""}">Estable</button>'
             f'<button type="submit" name="canal" value="beta" '
             f'class="{"on" if canal_actual == "beta" else ""}">Beta</button>'
-            "</form>"
-            '<form method="post" action="/actualizaciones/comprobar">'
-            '<button class="btn" type="submit">Buscar actualización</button></form>'
-            f"{estado_upd}"
-            '<p class="note">Comprueba GitHub: si hay una versión nueva, la descarga en 2º plano '
-            "y la deja lista; al pulsar Instalar, verifica su integridad (hash) y abre el "
-            "instalador. En el canal beta también se ofrecen versiones de prueba.</p></div>"
+            "</form></div>"
+            '<div class="cfg-fila"><span>Estado</span>'
+            '<form method="post" action="/actualizaciones/comprobar" style="margin:0">'
+            '<button class="btn w170" type="submit">Buscar actualización</button></form></div>'
+            f"{estado_upd}</div>"
         )
         # --- Copias de seguridad (#80) ---
         db_path = Path((cfg.get("almacenamiento", {}) or {}).get("db_path", "data/menu.db"))
         backups = listar_backups(db_path)
         filas_backup = "".join(
-            f'<tr><td>{html.escape(b.fecha)}</td><td>{b.tamano_kb:.0f} KB</td>'
-            f'<td style="text-align:right"><form method="post" action="/config/backups/restaurar" '
+            f'<tr><td>{html.escape(b.fecha)}</td>'
+            f'<td style="text-align:center">{b.tamano_kb:.0f} KB</td>'
+            f'<td style="text-align:center"><form method="post" '
+            f'action="/config/backups/restaurar" style="margin:0" '
             f'onsubmit="return confirm(\'¿Restaurar este backup? Se sobrescribirán los datos actuales '
             f'(se guarda antes una copia de seguridad).\')">'
             f'<input type="hidden" name="nombre" value="{html.escape(b.ruta.name)}">'
-            f'<button class="btn mini sec" type="submit">Restaurar</button></form></td></tr>'
+            f'<button class="btn mini neu" type="submit">Restaurar</button></form></td></tr>'
             for b in backups[:15]
         ) or '<tr><td colspan="3" class="meta">Sin copias todavía.</td></tr>'
-        cuerpo += (
+        # Spec: encabezado gris, filas alternas, Restaurar discreto; nota → ayuda ❓.
+        sec_copias = (
             '<div class="card"><div class="franja">Copias de seguridad</div>'
-            '<form method="post" action="/config/backups/crear">'
+            '<form method="post" action="/config/backups/crear" style="margin-bottom:10px">'
             '<button class="btn sec" type="submit">Crear copia ahora</button></form>'
-            f'<table><tr><th>Fecha</th><th>Tamaño</th><th></th></tr>{filas_backup}</table>'
-            '<p class="note">Se crea una copia automática al arrancar la app (BD + tu '
-            "configuración). Se conservan las últimas 10; restaurar guarda antes el estado "
-            "actual, por si acaso.</p></div>"
+            '<div class="tabla-bleed"><table class="cat-tabla">'
+            "<tr><th>Fecha</th><th style='text-align:center'>Tamaño</th>"
+            "<th style='text-align:center'>Restaurar</th></tr>"
+            f"{filas_backup}</table></div></div>"
         )
         # --- Catálogo programado (#116) ---
         auto_cat = bool(cfg.get("catalogo_auto_actualizar", False))
         dias_alerta = int(cfg.get("catalogo_dias_alerta", 7) or 7)
         dias_actual = _CATALOGO_ANTIGUEDAD["dias"]
-        estado_cat = (
-            f'<p class="meta">Catálogo actualizado hace <b>{dias_actual} día(s)</b>.</p>'
-            if dias_actual is not None else '<p class="meta">Aún sin comprobar.</p>'
+        estado_cat_txt = (
+            f"Actualizado hace {dias_actual} día(s)"
+            if dias_actual is not None else "Aún sin comprobar"
         )
-        cuerpo += (
+        svg_menos_c = (
+            '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" '
+            'stroke-linecap="round"><line x1="4" y1="8" x2="12" y2="8"/></svg>'
+        )
+        svg_mas_c = (
+            '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" '
+            'stroke-linecap="round"><line x1="8" y1="4" x2="8" y2="12"/>'
+            '<line x1="4" y1="8" x2="12" y2="8"/></svg>'
+        )
+        # Spec: filas del mismo alto — switch · stepper (sin flechitas, con −/+) ·
+        # estado; las notas viven en el modo ayuda ❓.
+        sec_catprog = (
             '<div class="card"><div class="franja">Catálogo programado</div>'
-            + estado_cat
-            + '<form method="post" action="/config/catalogo-programado">'
-            f'<label>Avisar si lleva más de <input name="catalogo_dias_alerta" type="number" '
-            f'min="1" value="{dias_alerta}" style="width:70px;display:inline-block"> días sin '
-            "actualizarse</label>"
-            '<label style="margin-top:8px"><input type="checkbox" name="catalogo_auto_actualizar" '
-            f'value="1" style="width:auto" {"checked" if auto_cat else ""}> Actualizarlo solo, en '
-            "2º plano, al superar ese umbral</label>"
-            '<div style="margin-top:10px"><button class="btn sec" type="submit">Guardar</button></div>'
-            "</form>"
-            '<p class="note">El auto-refresco tarda y usa la web de Alcampo; por eso está '
-            "desactivado por defecto. Sin él, solo verás un aviso en el menú.</p></div>"
+            '<form method="post" action="/config/catalogo-programado">'
+            '<div class="cfg-fila"><span>Actualizar el catálogo automáticamente</span>'
+            '<label class="switch"><input type="checkbox" name="catalogo_auto_actualizar" '
+            f'value="1" {"checked" if auto_cat else ""} onchange="this.form.submit()">'
+            '<span class="tk"></span></label></div>'
+            '<div class="cfg-fila"><span>Avisar si tiene más de (días)</span>'
+            '<span class="stepper">'
+            '<button type="button" class="rac-btn rac-menos" aria-label="Menos" '
+            f'onclick="stepDelta(this,-1)">{svg_menos_c}</button>'
+            f'<input name="catalogo_dias_alerta" type="text" inputmode="numeric" '
+            f'value="{dias_alerta}" '
+            "oninput=\"this.value=this.value.replace(/[^0-9]/g,'')\">"
+            '<button type="button" class="rac-btn rac-mas" aria-label="Más" '
+            f'onclick="stepDelta(this,1)">{svg_mas_c}</button></span></div>'
+            '<div class="cfg-fila"><span>Estado</span>'
+            f'<span class="meta">{estado_cat_txt}</span></div>'
+            '<div style="margin-top:10px"><button class="btn sec mini" type="submit">'
+            "Guardar</button></div></form></div>"
         )
-        # --- Diagnostico de errores LOCAL, opt-in (#81) ---
+        # --- Diagnostico de errores LOCAL, opt-in (#81): dentro de Actualizaciones ---
         telemetria_on = bool(cfg.get("telemetria_local", False))
         errores = leer_ultimos_errores() if telemetria_on else ""
-        cuerpo += (
+        sec_act += (
             '<div class="card"><div class="franja">Diagnóstico de errores</div>'
             '<form method="post" action="/config/telemetria">'
             '<label style="display:inline-flex;align-items:center;gap:6px">'
@@ -2208,7 +2260,7 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
             "propio). Solo queda en tu equipo, por si necesitas revisar un fallo.</p></div>"
         )
         # --- Apariencia (#63): tema claro/oscuro/sistema (movido aquí desde la barra) ---
-        cuerpo += (
+        sec_apariencia = (
             '<div class="card"><div class="franja">Apariencia</div>'
             "<label>Tema</label>"
             '<div class="seg" role="group" aria-label="Tema de color">'
@@ -2227,7 +2279,49 @@ document.querySelectorAll('.sel-grupo').forEach(refrescarMas);
             "marcarTemaActivo();"
             "</script></div>"
         )
-        return _pagina("Configuración", cuerpo)
+        # --- Ensamblado (spec): menú lateral sticky + una sección visible a la vez ---
+        secciones = [
+            ("menu", "Menú", sec_menu),
+            ("perfil", "Perfil y calorías", sec_perfil),
+            ("apariencia", "Apariencia", sec_apariencia),
+            ("act", "Actualizaciones", sec_act),
+            ("copias", "Copias de seguridad", sec_copias),
+            ("catprog", "Catálogo programado", sec_catprog),
+        ]
+        menu_lateral = "".join(
+            f'<button type="button" data-sec="{k}">{t}</button>' for k, t, _ in secciones
+        )
+        paneles = "".join(
+            f'<div class="cfg-sec" data-sec="{k}">{cuerpo_sec}</div>'
+            for k, _, cuerpo_sec in secciones
+        )
+        cuerpo = (
+            aviso
+            + f'<div class="cfg-layout"><nav class="cfg-menu">{menu_lateral}</nav>'
+            f'<div class="cfg-cont">{paneles}</div></div>'
+            + """<script>
+function mostrarSec(k){
+  var validas = Array.from(document.querySelectorAll('.cfg-sec')).map(function(s){ return s.dataset.sec; });
+  if (validas.indexOf(k) === -1) k = 'menu';
+  document.querySelectorAll('.cfg-menu button').forEach(function(b){
+    b.classList.toggle('on', b.dataset.sec === k);
+  });
+  document.querySelectorAll('.cfg-sec').forEach(function(s){
+    s.classList.toggle('on', s.dataset.sec === k);
+  });
+  try { history.replaceState(null, '', '#' + k); } catch (e) {}
+}
+document.querySelectorAll('.cfg-menu button').forEach(function(b){
+  b.addEventListener('click', function(){ mostrarSec(b.dataset.sec); });
+});
+function stepDelta(btn, d){
+  var inp = btn.parentElement.querySelector('input');
+  inp.value = Math.max(1, (parseInt(inp.value) || 1) + d);
+}
+mostrarSec((location.hash || '#menu').slice(1));
+</script>"""
+        )
+        return _pagina("Configuración", cuerpo, ayuda="config")
 
     @app.post("/config/perfil")
     async def config_perfil(request: Request):
