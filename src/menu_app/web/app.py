@@ -193,12 +193,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         n_plan = int(cfg.get("semanas_plan", 1))
         form_generar = (
             f'<div class="card"><form method="post" action="/generar">'
-            f'<label><input type="checkbox" name="batchcooking" value="1" style="width:auto"> '
-            f"Forzar batchcooking en TODAS las comidas</label>"
-            f'<div style="margin-top:10px"><button class="btn" type="submit">'
-            f"Generar plan nuevo ({n_plan} semana{'s' if n_plan != 1 else ''})</button></div>"
-            f'<p class="meta">Se planifican {n_plan} semanas sin repetir recetas dentro de la '
-            f"semana (regla configurable en Configuración).</p></form></div>"
+            '<label class="bc-line" style="margin:0 0 10px"><input type="checkbox" '
+            'name="batchcooking" value="1"> Forzar batchcooking en todas las comidas</label>'
+            f'<button class="btn" type="submit">'
+            f"Generar plan ({n_plan} semana{'s' if n_plan != 1 else ''})</button></form></div>"
         )
 
         if not semanas:
@@ -212,39 +210,53 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         semana = max(1, min(int(semana), n_sem))
         datos = semanas[semana]
 
+        # Fila de acciones (spec Lote 11): [Generar plan + ↺] sobre la columna Día,
+        # selector de semana centrado sobre Comida (flechas en los bordes de columna)
+        # y botón Historial a la derecha, sobre Cena.
         ant = (
-            f'<a href="/?semana={semana - 1}" aria-label="Semana anterior">◀</a>'
-            if semana > 1 else '<span class="off" aria-hidden="true">◀</span>'
+            f'<a class="fs izq" href="/?semana={semana - 1}" aria-label="Semana anterior">◀</a>'
+            if semana > 1 else '<span class="fs izq off" aria-hidden="true">◀</span>'
         )
         sig = (
-            f'<a href="/?semana={semana + 1}" aria-label="Semana siguiente">▶</a>'
-            if semana < n_sem else '<span class="off" aria-hidden="true">▶</span>'
+            f'<a class="fs der" href="/?semana={semana + 1}" aria-label="Semana siguiente">▶</a>'
+            if semana < n_sem else '<span class="fs der off" aria-hidden="true">▶</span>'
         )
-        flechas = f'<span class="arrows">{ant} Semana {semana}/{n_sem} {sig}</span>'
+        fila_acciones = (
+            '<div class="acc-menu">'
+            '<div class="a-dia">'
+            '<form id="f-generar" method="post" action="/generar">'
+            '<button class="gp" type="submit" title="Generar un plan nuevo">Generar plan</button>'
+            "</form>"
+            f'<form method="post" action="/alternativa">'
+            f'<input type="hidden" name="semana" value="{semana}">'
+            '<button class="gp-ico" type="submit" title="Generar alternativa de esta semana" '
+            'aria-label="Generar alternativa">↺</button></form>'
+            "</div>"
+            f'<div class="acc-sem">{ant}<span>Semana {semana}/{n_sem}</span>{sig}</div>'
+            '<div class="acc-hist"><a class="btn neu mini" href="/historial" '
+            'title="Ver planes anteriores">Historial</a></div>'
+            "</div>"
+            '<label class="bc-line"><input type="checkbox" name="batchcooking" value="1" '
+            'form="f-generar"> Forzar batchcooking en todas las comidas</label>'
+        )
 
         if not datos.get("factible"):
-            cuerpo = aviso + form_generar + (
-                f'<div class="card"><div class="franja">Plan por día {flechas}</div>'
-                f'<p class="warn">Sin menú factible esta semana: '
+            cuerpo = aviso + fila_acciones + (
+                '<div class="card">'
+                f'<p class="warn" style="margin:0">Sin menú factible esta semana: '
                 f'{html.escape(datos.get("motivo", ""))}. Amplía el corpus de recetas o relaja '
                 f"la regla de repetición.</p></div>"
             )
             return _pagina("Menú semanal", cuerpo, activa="menu")
 
-        botones_semana = (
-            '<a class="btn neu mini" href="/historial" style="margin-right:6px" '
-            'title="Ver planes anteriores">Historial</a>'
-            f'<form method="post" action="/alternativa" style="display:inline">'
-            f'<input type="hidden" name="semana" value="{semana}">'
-            f'<button class="btn sec" type="submit">Generar alternativa</button></form>'
-        )
         plan_card = (
-            f'<div class="card"><div class="franja">Plan por día {flechas} '
-            f'<span style="float:right">{botones_semana}</span></div>'
+            '<div class="card sin-pad">'
             + _tabla_dias(datos)
-            + f'<p class="meta">Coste de la semana: <b>{datos.get("coste_total", 0):.2f} €</b>. '
+            + '<div class="tabla-pie" style="padding-top:0">'
+            f'<p class="meta" style="margin:0">Coste de la semana: '
+            f'<b>{datos.get("coste_total", 0):.2f} €</b>. '
             f"Los días 🍱 la comida es un plato único batchcooking (transportable, sin postre). "
-            f"Pulsa una receta para ver sus ingredientes y precios.</p></div>"
+            f"Pulsa una receta para ver sus ingredientes y precios.</p></div></div>"
         )
 
         # Sugerencia de desayunos/meriendas (#50): opcional, orientativa (no forma
@@ -290,7 +302,7 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
         )
 
         cuerpo = (
-            aviso + _banner_hoy(datos) + form_generar + plan_card + desayunos_card
+            aviso + _banner_hoy(datos) + fila_acciones + plan_card + desayunos_card
             + _fila_nutrientes(datos, cfg) + cambio_card
         )
         return _pagina("Menú semanal", cuerpo, activa="menu")

@@ -31,7 +31,7 @@ _NOMBRE_DIA = {
 # 'grasas' del catalogo son grasas TOTALES: se muestran como insaturadas
 # restando las saturadas.
 _ORDEN_NUTRIENTES = [
-    ("energia_kcal", "Energía (Kcal)", "kcal"),
+    ("energia_kcal", "Energía", "Kcal"),
     ("proteinas", "Proteínas", "g"),
     ("hidratos", "Hidratos de Carbono", "g"),
     ("grasas_insat", "Grasas insaturadas", "g"),
@@ -87,14 +87,75 @@ body.ayuda-on .ayuda { display: block; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid #f1eee2; vertical-align: middle; }
 th { color: var(--muted); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
-/* Tabla del menu semanal: cabeceras con subrayado de color por comida + hover de fila. */
-.menu-tabla th { text-align: center; padding-bottom: 7px; border-bottom: 2px solid transparent; }
-.menu-tabla th.h-dia { border-bottom-color: var(--text); }
-.menu-tabla th.h-comida { border-bottom-color: var(--dorado); }
-.menu-tabla th.h-cena { border-bottom-color: #8a6f9c; }
-.menu-tabla td { text-align: center; vertical-align: middle; }
-.menu-tabla td.c-dia { text-align: left; }
-.menu-tabla tr.d:hover td { background: var(--hover-fila); }
+/* Tabla del menu semanal (spec Lote 11): tintes por columna, barritas cortas en la
+   cabecera, SIN divisores horizontales (solo borde vertical entre columnas), hover
+   que oscurece el tinte de la propia celda. */
+.menu-tabla { table-layout: fixed; }
+.menu-tabla th, .menu-tabla td { border-bottom: none; }
+.menu-tabla th { position: relative; text-align: center; padding: 8px 8px 13px; }
+.menu-tabla th::after { content: ""; position: absolute; bottom: 6px; left: 50%;
+  transform: translateX(-50%); width: 20px; height: 2px; border-radius: 1px; }
+.menu-tabla th.h-dia { width: 27%; background: var(--tinte-dia); }
+.menu-tabla th.h-dia::after { background: var(--text); }
+.menu-tabla th.h-comida { background: var(--tinte-com); }
+.menu-tabla th.h-comida::after { background: var(--dorado); }
+.menu-tabla th.h-cena { background: var(--tinte-cen); }
+.menu-tabla th.h-cena::after { background: #8a6f9c; }
+.menu-tabla td { text-align: center; vertical-align: middle; padding: 9px 8px; }
+.menu-tabla td + td { border-left: 1px solid var(--border); }
+.menu-tabla td.c-dia { text-align: left; background: var(--tinte-dia); padding-left: 12px; }
+.menu-tabla td.c-dia .coste-dia { display: block; font-size: 10px; color: #b3ae9e; font-weight: 400; }
+.menu-tabla td.c-com { background: var(--tinte-com); transition: background-color .15s; }
+.menu-tabla td.c-cen { background: var(--tinte-cen); transition: background-color .15s; }
+.menu-tabla td.c-com:not(.vacia):hover { background: var(--tinte-com-h); }
+.menu-tabla td.c-cen:not(.vacia):hover { background: var(--tinte-cen-h); }
+.menu-tabla td.vacia { color: #c9c4ae; }
+.card.sin-pad { padding: 0; overflow: hidden; }
+.tabla-pie { padding: 10px 18px 14px; }
+/* Fila de acciones del menu: [Generar plan + regenerar] | selector de semana | Historial. */
+.acc-menu { display: grid; grid-template-columns: 27fr 36.5fr 36.5fr; align-items: center;
+  margin-bottom: 10px; }
+.acc-menu .a-dia { display: flex; gap: 6px; padding-right: 10px; }
+.acc-menu .a-dia form:first-child { flex: 1; display: flex; }
+button.gp { flex: 1; background: var(--sec-bg); color: var(--verde-osc); border: 0;
+  border-radius: 7px; height: 29px; padding: 0 4px; font: inherit; font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: background-color .15s; }
+button.gp:hover { background: var(--sec-bg-h); }
+button.gp-ico { width: 29px; height: 29px; flex: none; border: 0; border-radius: 7px;
+  background: var(--ico-bg); color: #4a4636; font-size: 14px; display: flex;
+  align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  transition: background-color .15s; }
+button.gp-ico:hover { background: var(--sec-bg-h); }
+.acc-sem { position: relative; display: flex; align-items: center; justify-content: center;
+  height: 29px; font-size: 13px; font-weight: 600; color: var(--text); }
+.acc-sem .fs { position: absolute; width: 28px; height: 28px; display: flex;
+  align-items: center; justify-content: center; border-radius: 7px; background: transparent;
+  color: #4a4636; font-size: 12px; text-decoration: none; transition: background-color .15s; }
+.acc-sem a.fs:hover { background: var(--flecha-h); }
+.acc-sem .fs.izq { left: 0; transform: translateX(-50%); }
+.acc-sem .fs.der { right: 0; transform: translateX(50%); }
+.acc-sem .fs.off { color: #c8c3b2; }
+.acc-hist { display: flex; justify-content: flex-end; }
+.bc-line { display: flex; align-items: center; gap: 6px; font-weight: 400; font-size: 12px;
+  color: var(--muted); margin: 0 0 12px; }
+/* Tarjeta plegable (nutrientes): cabecera con hover y chevron. */
+button.card-plegar { display: flex; width: 100%; align-items: center;
+  justify-content: space-between; background: transparent; border: 0; padding: 13px 18px;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--verde-osc); cursor: pointer;
+  transition: background-color .15s; border-bottom: 1px solid var(--neutro-bg); }
+button.card-plegar:hover { background: var(--plegar-h); }
+button.card-plegar .chev { color: #a8a08a; font-size: 11px; transition: color .15s; }
+button.card-plegar:hover .chev { color: #5b5748; }
+.nutri-tabla { table-layout: fixed; }
+.nutri-tabla th, .nutri-tabla td { border-bottom: none; text-align: center; padding: 8px 10px; }
+.nutri-tabla th:first-child, .nutri-tabla td:first-child { text-align: left;
+  width: 34%; padding-left: 18px; }
+.nutri-tabla th:last-child { width: 9%; }
+.nutri-tabla tr:nth-child(even) td { background: var(--fila-nutri); }
+.nutri-tabla .obj { color: var(--muted); }
+.uni { color: #a8a08a; font-weight: 400; }
+.nutri-foot { background: var(--nota-bg); border-top: 1px solid var(--neutro-bg);
+  padding: 10px 18px; font-size: 11px; color: var(--muted); margin: 0; }
 .ok { color: var(--verde-accion); } .warn { color: var(--terracota); font-weight: 600; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   background: var(--verde-accion); color: #fff; border: 0; padding: 9px 16px; border-radius: 7px;
@@ -136,8 +197,13 @@ label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 12px; c
 .row { display: flex; gap: 14px; flex-wrap: wrap; }
 .row > div { flex: 1; min-width: 150px; }
 .big { font-size: 22px; font-weight: 700; color: var(--text); }
-a.receta { color: var(--verde-osc); text-decoration: none; }
-a.receta:hover { color: var(--verde); text-decoration: underline; }
+/* Enlaces de receta: texto tierra oscuro, SIN subrayado; el hover cambia el FONDO
+   (regla de diseño), no decora el texto. */
+a.receta { color: var(--verde-osc); text-decoration: none; border-radius: 5px;
+  padding: 1px 3px; transition: background-color .15s; }
+a.receta:hover { color: var(--verde-osc); text-decoration: none; background: var(--hover-fila); }
+/* Dentro de la tabla del menu el hover lo pinta la CELDA (tinte propio), no el enlace. */
+.menu-tabla a.receta:hover { background: transparent; }
 .arrows { display: inline-flex; gap: 8px; align-items: center; margin-left: 10px; }
 .arrows a, .arrows span.off { padding: 3px 11px; border-radius: 7px; background: var(--neutro-bg);
   color: var(--verde-osc); text-decoration: none; font-weight: 700; }
@@ -172,11 +238,13 @@ pre.log { background: #111; color: #9f9; padding: 10px; border-radius: 8px;
 # los muestra/oculta (body.ayuda-on). Se pueden ampliar sin tocar el resto de la UI.
 AYUDA_SECCION = {
     "menu": (
-        "<b>Menú semanal.</b> Genera un plan de comidas y cenas optimizado por coste, "
-        "salud (Nutri-Score y grupos de alimentos), sabor, temporada y variedad. Usa "
-        "«Generar alternativa» para otra versión de la semana, o «Cambiar por otra» para "
-        "sustituir una receta concreta. Con «Historial» ves y repites planes anteriores. "
-        "Pulsa una receta para ver ingredientes y precios de Alcampo."
+        "<b>Menú semanal.</b> «Generar plan» crea un plan nuevo de las semanas "
+        "configuradas, sin repetir recetas dentro de la semana (regla configurable en "
+        "Configuración). El botón «↺» genera una alternativa solo de la semana visible, "
+        "y «Cambiar por otra» sustituye una receta concreta. Con «Historial» ves y "
+        "repites planes anteriores. La casilla de batchcooking fuerza platos únicos "
+        "transportables en todas las comidas. Pulsa una receta para ver sus "
+        "ingredientes y precios de Alcampo."
     ),
     "compra": (
         "<b>Lista de la compra.</b> Reúne todos los productos del menú de la semana con sus "
@@ -255,19 +323,19 @@ def _fila_nutrientes(datos: dict, cfg: dict) -> str:
             # la fraccion del dia que cubre el menu, ± la tolerancia.
             centro = cfg_nut.kcal_por_comensal_dia * cfg_nut.fraccion_menu
             mas_menos = centro * cfg_nut.energia_tolerancia
-            objetivo = f"{centro:.0f} ± {mas_menos:.0f}"
+            objetivo = f"{centro - mas_menos:.0f} - {centro + mas_menos:.0f}"
             en_banda = centro - mas_menos - 0.5 <= val_dia <= centro + mas_menos + 0.5
         elif clave == "grasas_insat":
             bg, bs = bandas.get("grasas"), bandas.get("grasas_sat")
             lo = max(0.0, (bg.minimo or 0) - (bs.maximo or 0)) / div if bg else 0
             hi = (bg.maximo or 0) / div if bg else 0
-            objetivo = f"{lo:.0f}..{hi:.0f}"
+            objetivo = f"{lo:.0f} - {hi:.0f}"
             en_banda = lo - 0.5 <= val_dia <= hi + 0.5
         else:
             b = bandas.get(clave)
             lo = f"{b.minimo / div:.0f}" if b and b.minimo is not None else "—"
             hi = f"{b.maximo / div:.0f}" if b and b.maximo is not None else "—"
-            objetivo = f"{lo}..{hi}"
+            objetivo = f"{lo} - {hi}"
             en_banda = True
             if b and b.minimo is not None and val_dia < b.minimo / div - 0.5:
                 en_banda = False
@@ -275,20 +343,28 @@ def _fila_nutrientes(datos: dict, cfg: dict) -> str:
                 en_banda = False
         estado = '<span class="ok">✓</span>' if en_banda else '<span class="warn">✗</span>'
         filas += (
-            f"<tr><td>{nombre}</td><td>{val_dia:.0f} {unidad}</td>"
-            f"<td class='meta'>{objetivo} {unidad}</td><td>{estado}</td></tr>"
+            f'<tr><td>{nombre} <span class="uni">{unidad}</span></td><td>{val_dia:.0f}</td>'
+            f'<td class="obj">{objetivo}</td><td>{estado}</td></tr>'
         )
     frac = cfg_nut.fraccion_menu
+    # Tarjeta plegable (spec): cabecera con hover y chevron, tabla sin divisores con
+    # filas alternas, y nota al pie sobre fondo mas oscuro.
     return (
-        f'<div class="card"><div class="franja">Nutrientes por persona y día '
-        f"(comida + cena)</div>"
-        f"<table><tr><th>Nutriente</th><th>Total/día</th><th>Objetivo/día</th><th></th></tr>"
+        '<div class="card sin-pad">'
+        '<button class="card-plegar" type="button" aria-expanded="true" '
+        "onclick=\"var b=this.nextElementSibling;var abierto=b.style.display==='none';"
+        "b.style.display=abierto?'':'none';this.setAttribute('aria-expanded',abierto);"
+        "this.querySelector('.chev').textContent=abierto?'▴':'▾';\">"
+        'Nutrientes por persona y día <span class="chev">▴</span></button>'
+        "<div>"
+        '<table class="nutri-tabla"><tr><th>Nutriente</th><th>Total/día</th>'
+        "<th>Objetivo/día</th><th></th></tr>"
         f"{filas}</table>"
-        f'<p class="meta">Objetivos escalados a lo que cubre el menú: el {frac * 100:.0f}% de '
-        f"la energía del día (comida {cfg_nut.pct_comida * 100:.0f}% + cena "
-        f"{cfg_nut.pct_cena * 100:.0f}%, reparto recomendado FEN/AESAN). Con "
+        f'<p class="nutri-foot">Objetivos escalados a lo que cubre el menú: el '
+        f"{frac * 100:.0f}% de la energía del día (comida {cfg_nut.pct_comida * 100:.0f}% + "
+        f"cena {cfg_nut.pct_cena * 100:.0f}%, reparto recomendado FEN/AESAN). Con "
         f"{cfg_nut.kcal_por_comensal_dia:.0f} kcal/día configuradas, comida+cena deben aportar "
-        f"{cfg_nut.kcal_por_comensal_dia * frac:.0f} kcal.</p></div>"
+        f"{cfg_nut.kcal_por_comensal_dia * frac:.0f} kcal.</p></div></div>"
     )
 
 
@@ -348,22 +424,31 @@ def _tabla_dias(datos: dict) -> str:
     raciones = datos.get("raciones", {}) or {}
     sel_com = datos.get("seleccion_comida", {}) or {}
     sel_cen = datos.get("seleccion_cena", {}) or {}
+    num_com = float(datos.get("num_comensales", 1) or 1)
 
-    def _t(rid):
+    def _celda(rid: str | None, col: str) -> tuple[str, float]:
+        """Celda de comida/cena con su tinte de columna; devuelve (html, coste)."""
         if not rid:
-            return "—"
+            return f'<td class="c-{col} vacia">–</td>', 0.0
         n_usos = (sel_com.get(rid, 0) or 0) + (sel_cen.get(rid, 0) or 0)
         x = raciones.get(rid)
         por_comida = (x / n_usos) if (x and n_usos) else None
         enlace = _link_receta(rid, info.get(rid, {}), por_comida)
-        return enlace + _alerta_comida(info.get(rid, {}), por_comida or 1.0)
+        aviso = _alerta_comida(info.get(rid, {}), por_comida or 1.0)
+        coste = (info.get(rid, {}).get("coste_racion") or 0.0) * (por_comida or 1.0) * num_com
+        return f'<td class="c-{col}">{enlace}{aviso}</td>', coste
 
     filas = ""
     for dia, comida, cena, es_bc in asignar_dias(datos, DIAS_SEMANA):
         etiqueta = ' <span class="meta">🍱 plato único</span>' if es_bc else ""
+        td_com, c1 = _celda(comida, "com")
+        td_cen, c2 = _celda(cena, "cen")
+        coste_dia = (
+            f'<span class="coste-dia">{c1 + c2:.2f} €</span>' if (c1 + c2) > 0 else ""
+        )
         filas += (
-            f'<tr class="d"><td class="c-dia"><b>{_NOMBRE_DIA.get(dia, dia)}</b>{etiqueta}</td>'
-            f"<td>{_t(comida)}</td><td>{_t(cena)}</td></tr>"
+            f'<tr><td class="c-dia"><b>{_NOMBRE_DIA.get(dia, dia)}</b>{etiqueta}{coste_dia}</td>'
+            f"{td_com}{td_cen}</tr>"
         )
     tabla = (
         '<table class="menu-tabla"><tr>'
@@ -371,7 +456,7 @@ def _tabla_dias(datos: dict) -> str:
         '<th class="h-cena">🌙 Cena</th>'
         f"</tr>{filas}</table>"
     )
-    return tabla + _resumen_grupos(datos)
+    return tabla + f'<div class="tabla-pie">{_resumen_grupos(datos)}</div>'
 
 
 def _banner_hoy(datos: dict) -> str:

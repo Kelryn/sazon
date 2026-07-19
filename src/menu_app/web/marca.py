@@ -46,6 +46,17 @@ TOKENS_CSS = f"""
   --neutro-bg-h: #e9e5d5;
   --fila-alt: #faf8f1;
   --hover-fila: #eef3e8;
+  /* Tintes de columna de la tabla del menu (Lote 11). */
+  --tinte-dia: #faf9f3;
+  --tinte-com: #fdf9f0;
+  --tinte-cen: #faf8fb;
+  --tinte-com-h: #f8f0dd;
+  --tinte-cen-h: #f2ecf4;
+  --fila-nutri: #fbfaf6;
+  --nota-bg: #f6f4ec;
+  --plegar-h: #f8f6ee;
+  --flecha-h: #f1eee0;
+  --ico-bg: #f3f1e8;
   --shadow: 0 2px 8px rgba(60,74,46,.07);
   --radio: 12px;
 }}
@@ -69,6 +80,16 @@ TOKENS_CSS = f"""
     --neutro-bg-h: #34362a;
     --fila-alt: #1f2216;
     --hover-fila: #2a2f1e;
+    --tinte-dia: #22251a;
+    --tinte-com: #262316;
+    --tinte-cen: #242028;
+    --tinte-com-h: #322d1c;
+    --tinte-cen-h: #302a35;
+    --fila-nutri: #1f2216;
+    --nota-bg: #2b2c22;
+    --plegar-h: #2a2f1e;
+    --flecha-h: #2a2f1e;
+    --ico-bg: #2b2c22;
     --shadow: none;
   }}
 }}
@@ -80,7 +101,11 @@ TOKENS_CSS = f"""
   --border: #333827; --text: #e8e6da; --muted: #9c9885; --chip-bg: #2b3020;
   --chip-text: #cdd8bd; --sec-bg: #3a4230; --sec-bg-h: #47523a;
   --neutro-bg: #2b2c22; --neutro-bg-h: #34362a; --fila-alt: #1f2216;
-  --hover-fila: #2a2f1e; --shadow: none;
+  --hover-fila: #2a2f1e;
+  --tinte-dia: #22251a; --tinte-com: #262316; --tinte-cen: #242028;
+  --tinte-com-h: #322d1c; --tinte-cen-h: #302a35; --fila-nutri: #1f2216;
+  --nota-bg: #2b2c22; --plegar-h: #2a2f1e; --flecha-h: #2a2f1e;
+  --ico-bg: #2b2c22; --shadow: none;
 }}
 :root[data-theme="light"] {{
   --barra: {VERDE};
@@ -89,7 +114,11 @@ TOKENS_CSS = f"""
   --border: #eeead9; --text: {CARBON}; --muted: #8f8a75; --chip-bg: #eef1e6;
   --chip-text: {VERDE_OSCURO}; --sec-bg: #dde4d0; --sec-bg-h: #c9d4b3;
   --neutro-bg: #f1eee2; --neutro-bg-h: #e9e5d5; --fila-alt: #faf8f1;
-  --hover-fila: #eef3e8; --shadow: 0 2px 8px rgba(60,74,46,.07);
+  --hover-fila: #eef3e8;
+  --tinte-dia: #faf9f3; --tinte-com: #fdf9f0; --tinte-cen: #faf8fb;
+  --tinte-com-h: #f8f0dd; --tinte-cen-h: #f2ecf4; --fila-nutri: #fbfaf6;
+  --nota-bg: #f6f4ec; --plegar-h: #f8f6ee; --flecha-h: #f1eee0;
+  --ico-bg: #f3f1e8; --shadow: 0 2px 8px rgba(60,74,46,.07);
 }}
 """
 

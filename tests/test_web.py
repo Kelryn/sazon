@@ -26,7 +26,7 @@ def test_home_responde_aunque_no_haya_plan(client):
     assert r.status_code == 200
     assert "Sazón" in r.text
     assert "no hay ningún plan" in r.text
-    assert "Generar plan nuevo" in r.text
+    assert "Generar plan" in r.text  # botón renombrado en el rediseño (Lote 11)
 
 
 def test_generar_plan_sin_recetas_reporta_infactible(client):
