@@ -27,6 +27,7 @@ VERDE_ACCION_HOVER = "#4d9147"
 TOKENS_CSS = f"""
 :root {{
   --verde: {VERDE};
+  --barra: {VERDE};
   --verde-osc: {VERDE_OSCURO};
   --verde-accion: {VERDE_ACCION};
   --verde-accion-h: {VERDE_ACCION_HOVER};
@@ -51,6 +52,7 @@ TOKENS_CSS = f"""
 @media (prefers-color-scheme: dark) {{
   :root {{
     --verde: #8fa06e;
+    --barra: #313826;
     --verde-osc: #b7c2a2;
     --verde-accion: #5c9a55;
     --verde-accion-h: #6faa66;
@@ -72,6 +74,7 @@ TOKENS_CSS = f"""
 }}
 /* Toggle MANUAL de tema (#63): gana siempre al prefers-color-scheme del sistema. */
 :root[data-theme="dark"] {{
+  --barra: #313826;
   --verde: #8fa06e; --verde-osc: #b7c2a2; --verde-accion: #5c9a55;
   --verde-accion-h: #6faa66; --bg: #17190f; --surface: #20241a;
   --border: #333827; --text: #e8e6da; --muted: #9c9885; --chip-bg: #2b3020;
@@ -80,6 +83,7 @@ TOKENS_CSS = f"""
   --hover-fila: #2a2f1e; --shadow: none;
 }}
 :root[data-theme="light"] {{
+  --barra: {VERDE};
   --verde: {VERDE}; --verde-osc: {VERDE_OSCURO}; --verde-accion: {VERDE_ACCION};
   --verde-accion-h: {VERDE_ACCION_HOVER}; --bg: {CREMA}; --surface: #ffffff;
   --border: #eeead9; --text: {CARBON}; --muted: #8f8a75; --chip-bg: #eef1e6;
@@ -89,23 +93,20 @@ TOKENS_CSS = f"""
 }}
 """
 
-# Script de arranque: aplica el tema guardado ANTES de pintar (evita parpadeo) y
-# expone alternarTema() para el boton de la cabecera.
+# Script de arranque: aplica el tema guardado ANTES de pintar (evita parpadeo).
+# Lote 11: el tema por defecto es CLARO (el aspecto de diseño); solo se sigue al
+# tema del SO si el usuario elige "Sistema" en Configuración → Apariencia.
 TEMA_SCRIPT = """<script>
 (function(){
-  var t = localStorage.getItem('sazon-tema');
-  if (t) document.documentElement.setAttribute('data-theme', t);
+  var t = localStorage.getItem('sazon-tema') || 'light';
+  if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  // t === 'system': sin atributo -> sigue al prefers-color-scheme del SO.
 })();
 function alternarTema(){
-  var actual = document.documentElement.getAttribute('data-theme');
-  var siguiente = actual === 'dark' ? 'light' : (actual === 'light' ? null : 'dark');
-  if (siguiente) {
-    document.documentElement.setAttribute('data-theme', siguiente);
-    localStorage.setItem('sazon-tema', siguiente);
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-    localStorage.removeItem('sazon-tema');
-  }
+  var actual = document.documentElement.getAttribute('data-theme') || 'light';
+  var siguiente = actual === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', siguiente);
+  localStorage.setItem('sazon-tema', siguiente);
 }
 </script>"""
 

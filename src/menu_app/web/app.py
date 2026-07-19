@@ -1956,9 +1956,9 @@ function reescalarReceta() {{
             "<script>"
             "function ponerTema(t){var e=document.documentElement;"
             'if(t){e.setAttribute("data-theme",t);localStorage.setItem("sazon-tema",t);}'
-            'else{e.removeAttribute("data-theme");localStorage.removeItem("sazon-tema");}'
+            'else{e.removeAttribute("data-theme");localStorage.setItem("sazon-tema","system");}'
             "marcarTemaActivo();}"
-            'function marcarTemaActivo(){var t=localStorage.getItem("sazon-tema")||"system";'
+            'function marcarTemaActivo(){var t=localStorage.getItem("sazon-tema")||"light";'
             'document.querySelectorAll("[data-tema-btn]").forEach(function(b){'
             'b.classList.toggle("on",b.dataset.temaBtn===t);});}'
             "marcarTemaActivo();"

@@ -49,7 +49,7 @@ _ESTILO = (
 body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0;
   background: var(--bg); color: var(--text); }
 /* --- Barra de herramientas (Lote 11): fija; Menu/Compra/Recetas/Catalogo + logo + config + ayuda --- */
-header { position: sticky; top: 0; z-index: 20; background: var(--verde); color: #fff;
+header { position: sticky; top: 0; z-index: 20; background: var(--barra); color: #fff;
   padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
 header .mainnav { display: flex; gap: 6px; }
 header .mainnav a { position: relative; color: #fff; text-decoration: none; font-weight: 700;
@@ -123,9 +123,12 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: 
   height: 12px; border-radius: 50%; background: #fff; border: 1px solid #aeb99a; cursor: pointer; }
 input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff;
   border: 1px solid #aeb99a; cursor: pointer; }
-input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; padding: 0;
-  border: 1px solid #cfcabb; border-radius: 4px; background: #fff; cursor: pointer; position: relative;
-  vertical-align: -3px; flex: none; }
+/* !important: varios formularios llevan style="width:auto" inline (contra el
+   input{width:100%} antiguo); sin esto el checkbox custom colapsa a una barrita. */
+input[type=checkbox] { appearance: none; -webkit-appearance: none;
+  width: 16px !important; height: 16px !important; padding: 0;
+  border: 1px solid #cfcabb; border-radius: 4px; background: var(--surface); cursor: pointer;
+  position: relative; vertical-align: -3px; flex: none; }
 input[type=checkbox]:hover { border-color: #b7b09a; }
 input[type=checkbox]:checked::after { content: "\\2713"; position: absolute; inset: 0; display: flex;
   align-items: center; justify-content: center; color: var(--verde); font-size: 12px; font-weight: 700; }
