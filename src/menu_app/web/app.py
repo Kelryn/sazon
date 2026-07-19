@@ -1640,7 +1640,9 @@ function cambiarRaciones(d) {{
             catalogo = ingredientes_catalogo(conn)
         finally:
             conn.close()
-        return _pagina("Nueva receta", _editor_html(None, catalogo))
+        return _pagina(
+            "Nueva receta", _editor_html(None, catalogo), activa="recetas", ayuda="editor"
+        )
 
     @app.get("/recetas/{receta_id}/editar", response_class=HTMLResponse)
     def receta_editar(receta_id: str):
@@ -1653,7 +1655,10 @@ function cambiarRaciones(d) {{
             barras = _barras_nutrientes(conn, cfg, datos["ingredientes"], datos["raciones"])
         finally:
             conn.close()
-        return _pagina("Editar receta", _editor_html(datos, catalogo) + barras)
+        return _pagina(
+            "Editar receta", _editor_html(datos, catalogo) + barras,
+            activa="recetas", ayuda="editor",
+        )
 
     @app.post("/recetas/guardar")
     async def receta_guardar(request: Request):
@@ -1678,6 +1683,8 @@ function cambiarRaciones(d) {{
                 es_favorita=bool(form.get("favorita")),
                 es_plato_unico=bool(form.get("plato_unico")),
                 es_cena=bool(form.get("cena")),
+                es_desayuno=bool(form.get("desayuno")),
+                instrucciones=str(form.get("instrucciones", "")),
                 receta_id=form.get("receta_id") or None,
             )
             destino = f"/recetas/{rid}/editar?msg=Receta guardada. Ejecuta menu-app-emparejar."

@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # Columnas añadidas despues de la creacion inicial de cada tabla. Si la tabla ya
 # existe (BD de una version anterior), se agregan con ALTER TABLE de forma
@@ -56,6 +56,9 @@ _COLUMNAS_EVOLUTIVAS: dict[str, list[tuple[str, str]]] = {
         # batchcooking) y pensada para CENA (aptitud de cena maxima).
         ("es_plato_unico", "INTEGER"),
         ("es_cena", "INTEGER"),
+        # Marca manual de DESAYUNO (Lote 11): la usará la futura columna Desayuno
+        # del menú (distinta de rol='desayuno', que es clasificación automática).
+        ("es_desayuno", "INTEGER"),
         # Etiquetas separadas por coma (rapido, picante, niños...) para filtrar
         # recetas por afinidad (#46). NULL/"" = sin etiquetas.
         ("tags", "TEXT"),

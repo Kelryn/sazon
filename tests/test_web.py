@@ -136,7 +136,8 @@ def test_pagina_recetas_y_editor(client):
     assert r_nueva.status_code == 200
     assert "catalogo_ing" in r_nueva.text and "ing_nombre" in r_nueva.text
 
-    # Alta con ingredientes estructurados.
+    # Alta con ingredientes estructurados (incluye los campos nuevos del Lote 11:
+    # marca de desayuno + preparación persistida).
     r2 = client.post(
         "/recetas/guardar",
         data={
@@ -146,12 +147,16 @@ def test_pagina_recetas_y_editor(client):
             "ing_cantidad": ["300", "1"],
             "ing_unidad": ["g", "ud"],
             "plato_unico": "1",
+            "desayuno": "1",
+            "instrucciones": "Cocer 30 min.",
         },
         follow_redirects=True,
     )
     assert r2.status_code == 200
     assert "Lentejas de prueba" in r2.text  # redirige al editor de la receta guardada
     assert "Nutrientes de una ración" in r2.text  # barras de nutrientes
+    assert 'name="desayuno" value="1" checked' in r2.text  # es_desayuno persistido
+    assert "Cocer 30 min." in r2.text  # instrucciones persistidas
 
 
 def test_alta_invalida_muestra_error(client):

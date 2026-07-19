@@ -61,6 +61,8 @@ def guardar_receta(
     es_favorita: bool = False,
     es_plato_unico: bool = False,
     es_cena: bool = False,
+    es_desayuno: bool = False,
+    instrucciones: str | None = None,
     receta_id: str | None = None,
 ) -> str:
     """Crea o EDITA una receta manual con ingredientes estructurados.
@@ -92,19 +94,20 @@ def guardar_receta(
     receta = Receta(
         id=rid, url=url, fuente=FUENTE_MANUAL, titulo=titulo.strip(), raciones=raciones,
         tiempo_total_min=None, categoria=None, cocina=None, rating=None, rating_count=None,
-        imagen=None, instrucciones=None, ingredientes=parsed,
+        imagen=None, instrucciones=(instrucciones or "").strip() or None, ingredientes=parsed,
     )
     fecha = datetime.now(UTC).isoformat(timespec="seconds")
     RecetaRepository(conn).upsert_receta(receta, fecha)
     conn.execute(
         "UPDATE recetas SET es_batchcooking = ?, rol = ?, es_favorita = ?, "
-        "es_plato_unico = ?, es_cena = ? WHERE id = ?",
+        "es_plato_unico = ?, es_cena = ?, es_desayuno = ? WHERE id = ?",
         (
             1 if (es_plato_unico or es_batchcooking(titulo)) else 0,
             "principal",
             1 if es_favorita else 0,
             1 if es_plato_unico else 0,
             1 if es_cena else 0,
+            1 if es_desayuno else 0,
             rid,
         ),
     )
@@ -141,7 +144,7 @@ def cargar_receta(conn: sqlite3.Connection, receta_id: str) -> dict | None:
     """Datos de una receta para el editor (cabecera + ingredientes)."""
     cab = conn.execute(
         "SELECT id, titulo, raciones, fuente, es_favorita, es_plato_unico, es_cena, "
-        "es_batchcooking FROM recetas WHERE id = ?",
+        "es_desayuno, es_batchcooking, instrucciones FROM recetas WHERE id = ?",
         (receta_id,),
     ).fetchone()
     if cab is None:
@@ -156,7 +159,9 @@ def cargar_receta(conn: sqlite3.Connection, receta_id: str) -> dict | None:
         "es_favorita": bool(cab["es_favorita"]),
         "es_plato_unico": bool(cab["es_plato_unico"]),
         "es_cena": bool(cab["es_cena"]),
+        "es_desayuno": bool(cab["es_desayuno"]),
         "es_batchcooking": bool(cab["es_batchcooking"]),
+        "instrucciones": cab["instrucciones"] or "",
         "ingredientes": [
             {"nombre": i["nombre"], "cantidad": i["cantidad"], "unidad": i["unidad"] or "g"}
             for i in ings

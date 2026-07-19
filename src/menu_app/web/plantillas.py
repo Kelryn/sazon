@@ -223,6 +223,29 @@ table.cat-tabla tr:nth-child(odd) td { background: var(--fila-alt); }
   :root:not([data-theme="light"]) .lc-fila:hover { background: var(--hover-fila); }
   :root:not([data-theme="light"]) .lc-total-fila { border-top-color: var(--text); }
 }
+/* Editor de receta (spec Lote 11). */
+.ing-fila { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.ing-fila input[name=ing_nombre] { flex: 1; height: 38px; }
+.ing-cant { width: 74px !important; text-align: center; height: 38px; flex: none; }
+.ing-uni { width: 64px !important; text-align: center; height: 38px; flex: none; }
+textarea.prep { display: block; width: calc(100% + 36px); margin: 4px -18px 0;
+  border-radius: 0; border-left: 0; border-right: 0; border-color: var(--border);
+  background: var(--surface); resize: none; overflow: hidden; padding: 10px 18px;
+  transition: background-color .15s; }
+textarea.prep:hover, textarea.prep:focus { background: #f7f5ee; border-color: var(--border); }
+:root[data-theme="dark"] textarea.prep:hover,
+:root[data-theme="dark"] textarea.prep:focus { background: var(--neutro-bg); }
+.btn.w130 { width: 130px; height: 36px; padding: 0; }
+.btn.rojo { background: #f6e7e3; color: var(--terracota); }
+.btn.rojo:hover { background: #f0d5cf; }
+:root[data-theme="dark"] .btn.rojo { background: #3a2620; }
+:root[data-theme="dark"] .btn.rojo:hover { background: #472e26; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) textarea.prep:hover,
+  :root:not([data-theme="light"]) textarea.prep:focus { background: var(--neutro-bg); }
+  :root:not([data-theme="light"]) .btn.rojo { background: #3a2620; }
+  :root:not([data-theme="light"]) .btn.rojo:hover { background: #472e26; }
+}
 /* Valoraciones (spec Lote 11): baremos con estrellas interactivas y selectores ±. */
 .baremo-fila { display: flex; justify-content: space-between; align-items: center;
   gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--neutro-bg); font-size: 13px;
@@ -487,6 +510,13 @@ AYUDA_SECCION = {
         "<b>Buscar.</b> Búsqueda global: recetas por título y productos del catálogo por "
         "nombre. Pulsa una receta para abrir su ficha, o un producto para ver y corregir "
         "sus datos."
+    ),
+    "editor": (
+        "<b>Editor de receta.</b> Escribe para buscar cada ingrediente en el catálogo de "
+        "Alcampo; la cantidad va en números y la unidad al lado. Usa − y + para quitar o "
+        "añadir líneas, y ajusta las raciones con el selector. Las casillas marcan para qué "
+        "sirve la receta (batchcooking, desayuno, cena, favorita). Tras guardar, la app "
+        "empareja los ingredientes con productos al regenerar (o con menu-app-emparejar)."
     ),
     "valoraciones": (
         "<b>Valoraciones.</b> En «Valorar» aparecen las recetas cocinadas esta semana o la "
@@ -760,14 +790,26 @@ def _resumen_grupos(datos: dict) -> str:
 
 
 def _editor_html(datos: dict | None, catalogo: list[str]) -> str:
-    """Formulario de crear/editar receta con filas de ingredientes dinamicas."""
+    """Formulario de crear/editar receta (spec Lote 11): título + raciones −/+,
+    filas de ingredientes con buscador y botones ± sutiles, preparación de borde
+    a borde autoexpandible, casillas y botones Guardar/Eliminar del mismo tamaño."""
     es_edicion = datos is not None
     titulo = html.escape(datos["titulo"]) if es_edicion else ""
     raciones = datos["raciones"] if es_edicion else 4
     rid = html.escape(datos["id"]) if es_edicion else ""
+    prep = html.escape(datos.get("instrucciones", "")) if es_edicion else ""
     ings = datos["ingredientes"] if es_edicion else [{"nombre": "", "cantidad": "", "unidad": "g"}]
 
     datalist = "".join(f"<option>{html.escape(n)}</option>" for n in catalogo)
+    svg_menos = (
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" '
+        'stroke-linecap="round"><line x1="4" y1="8" x2="12" y2="8"/></svg>'
+    )
+    svg_mas = (
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" '
+        'stroke-linecap="round"><line x1="8" y1="4" x2="8" y2="12"/>'
+        '<line x1="4" y1="8" x2="12" y2="8"/></svg>'
+    )
 
     def _fila(ing):
         nombre = html.escape(str(ing.get("nombre", "")))
@@ -777,14 +819,17 @@ def _editor_html(datos: dict | None, catalogo: list[str]) -> str:
             f'<option value="{u}"{" selected" if u == uni else ""}>{u}</option>' for u in UNIDADES
         )
         return (
-            '<div class="ing-fila" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">'
+            '<div class="ing-fila">'
             f'<input name="ing_nombre" list="catalogo_ing" value="{nombre}" '
-            'placeholder="Ingrediente del catálogo…" style="flex:3">'
-            f'<input name="ing_cantidad" value="{cant}" inputmode="decimal" '
-            'pattern="[0-9]*[.,]?[0-9]*" placeholder="cant." style="flex:1" '
+            'placeholder="Buscar ingrediente en Alcampo…">'
+            f'<input name="ing_cantidad" class="ing-cant" value="{cant}" inputmode="decimal" '
+            'pattern="[0-9]*[.,]?[0-9]*" placeholder="cant." '
             "oninput=\"this.value=this.value.replace(/[^0-9.,]/g,'')\">"
-            f'<select name="ing_unidad" style="flex:1">{ops}</select>'
-            '<button type="button" class="btn mini sec" onclick="this.parentElement.remove()">−</button>'
+            f'<select name="ing_unidad" class="ing-uni">{ops}</select>'
+            '<button type="button" class="pm-btn menos" aria-label="Quitar ingrediente" '
+            f'onclick="quitarIng(this)">{svg_menos}</button>'
+            '<button type="button" class="pm-btn mas" aria-label="Añadir ingrediente" '
+            f'onclick="addFila()">{svg_mas}</button>'
             "</div>"
         )
 
@@ -792,41 +837,77 @@ def _editor_html(datos: dict | None, catalogo: list[str]) -> str:
 
     def chk(k: str) -> str:
         return " checked" if es_edicion and datos.get(k) else ""
+
+    eliminar = (
+        f'<button class="btn rojo w130" formaction="/recetas/{rid}/eliminar" '
+        'formmethod="post" formnovalidate>Eliminar</button>' if es_edicion else ""
+    )
     return f"""
 <div class="card"><div class="franja">{"Editar" if es_edicion else "Nueva"} receta</div>
 <form method="post" action="/recetas/guardar">
 <input type="hidden" name="receta_id" value="{rid}">
+<input type="hidden" name="raciones" id="rac-input" value="{raciones}">
 <datalist id="catalogo_ing">{datalist}</datalist>
-<div class="row">
-  <div style="flex:3"><label>Título</label>
+<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+  <div style="flex:1;min-width:220px"><label>Título</label>
     <input name="titulo" required value="{titulo}" placeholder="Lentejas de la abuela"></div>
-  <div><label>Raciones</label>
-    <input name="raciones" type="number" min="1" value="{raciones}" required></div>
+  <span class="rac-box" style="height:38px">Raciones
+    <button class="rac-btn rac-menos" type="button" aria-label="Menos raciones"
+      onclick="racDelta(-1)">{svg_menos}</button>
+    <b id="rac-num">{raciones}</b>
+    <button class="rac-btn rac-mas" type="button" aria-label="Más raciones"
+      onclick="racDelta(1)">{svg_mas}</button></span>
 </div>
 <label>Ingredientes</label>
 <div id="ings">{filas}</div>
-<button type="button" class="btn mini" onclick="addFila()">+ Añadir ingrediente</button>
-<div style="margin-top:12px">
-  <label><input type="checkbox" name="plato_unico" value="1"{chk('es_plato_unico')} style="width:auto"> Óptima para batchcooking / plato único</label>
-  <label><input type="checkbox" name="cena" value="1"{chk('es_cena')} style="width:auto"> Buena como cena (ligera y sencilla)</label>
-  <label><input type="checkbox" name="favorita" value="1"{chk('es_favorita')} style="width:auto"> Favorita ★</label>
+<label>Preparación</label>
+<textarea name="instrucciones" class="prep" rows="2" oninput="autoAlto(this)"
+placeholder="Escribir aquí el método de preparación de esta receta si es necesario">{prep}</textarea>
+<div style="margin-top:12px;display:flex;gap:18px;flex-wrap:wrap">
+  <label style="display:inline-flex;align-items:center;gap:7px;margin:0;font-weight:400;font-size:13px;color:var(--text)">
+    <input type="checkbox" name="plato_unico" value="1"{chk('es_plato_unico')}> Batchcooking</label>
+  <label style="display:inline-flex;align-items:center;gap:7px;margin:0;font-weight:400;font-size:13px;color:var(--text)">
+    <input type="checkbox" name="desayuno" value="1"{chk('es_desayuno')}> Desayuno</label>
+  <label style="display:inline-flex;align-items:center;gap:7px;margin:0;font-weight:400;font-size:13px;color:var(--text)">
+    <input type="checkbox" name="cena" value="1"{chk('es_cena')}> Cena</label>
+  <label style="display:inline-flex;align-items:center;gap:7px;margin:0;font-weight:400;font-size:13px;color:var(--text)">
+    <input type="checkbox" name="favorita" value="1"{chk('es_favorita')}> Favorita</label>
 </div>
-<div style="margin-top:12px">
-  <button class="btn" type="submit">Guardar receta</button>
-  {"" if not es_edicion else f'<button class="btn sec" formaction="/recetas/{rid}/eliminar" formmethod="post" formnovalidate>Eliminar</button>'}
+<div style="margin-top:14px;display:flex;gap:10px">
+  <button class="btn w130" type="submit">Guardar</button>
+  {eliminar}
 </div>
 </form>
-<p class="meta">Elige el ingrediente escribiendo (se busca en el catálogo de Alcampo), la unidad,
-y la cantidad (solo números). Usa + y − para añadir o quitar líneas. Tras guardar, ejecuta
-<code>menu-app-emparejar</code> para casar los ingredientes con productos.</p>
 </div>
 <script>
+function racDelta(d) {{
+  var inp = document.getElementById('rac-input');
+  var v = Math.max(1, (parseInt(inp.value) || 1) + d);
+  inp.value = v;
+  document.getElementById('rac-num').textContent = v;
+}}
+function refrescarMasIng() {{
+  var filas = document.querySelectorAll('#ings .ing-fila');
+  filas.forEach(function(f, i) {{
+    f.querySelector('.mas').classList.toggle('oculto', i !== filas.length - 1);
+  }});
+}}
+function quitarIng(btn) {{
+  var filas = document.querySelectorAll('#ings .ing-fila');
+  if (filas.length > 1) {{ btn.closest('.ing-fila').remove(); }}
+  else {{ btn.closest('.ing-fila').querySelectorAll('input').forEach(function(i){{ i.value=''; }}); }}
+  refrescarMasIng();
+}}
 function addFila() {{
   var cont = document.getElementById('ings');
   var f = cont.firstElementChild.cloneNode(true);
   f.querySelectorAll('input').forEach(function(i){{ i.value=''; }});
   cont.appendChild(f);
+  refrescarMasIng();
 }}
+function autoAlto(t) {{ t.style.height = 'auto'; t.style.height = (t.scrollHeight + 2) + 'px'; }}
+refrescarMasIng();
+document.querySelectorAll('textarea.prep').forEach(autoAlto);
 </script>
 """
 
