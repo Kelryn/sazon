@@ -57,6 +57,7 @@ from ..optimizacion.planes import (
 )
 from ..recetas.catalogo_ingredientes import ingredientes_catalogo
 from ..recetas.manual import (
+    FUENTE_MANUAL,
     cargar_receta,
     eliminar_receta,
     guardar_receta,
@@ -361,7 +362,10 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 (receta_id,),
             ).fetchone()
             if cab is None:
-                return _pagina("Receta", '<div class="card warn">Receta no encontrada.</div>')
+                return _pagina(
+                    "Receta", '<div class="card warn">Receta no encontrada.</div>',
+                    activa="recetas",
+                )
             ingredientes = conn.execute(
                 "SELECT texto_original, nombre_normalizado, cantidad, unidad, cantidad_metrica, "
                 "unidad_metrica FROM receta_ingredientes WHERE receta_id = ? ORDER BY orden",
@@ -388,13 +392,14 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                     if gramos is not None:
                         estimado = ' <span class="meta">(≈ estimado)</span>'
                         um = "g"
+                vacia = '<span class="celda-vacia">–</span>'
                 cant_html = (
                     f'<span class="cant-val" data-base="{gramos}">{gramos:.0f}</span> {um}{estimado}'
-                    if gramos is not None else "—"
+                    if gramos is not None else vacia
                 )
 
                 rid = mapeo.get(ing["nombre_normalizado"])
-                prod_html, precio_html = '<span class="meta">sin producto</span>', "—"
+                prod_html, precio_html = vacia, vacia
                 if rid:
                     p = conn.execute(
                         "SELECT nombre, url_producto, precio_eur, precio_por_unidad, unidad_medida "
@@ -402,43 +407,52 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                         (rid,),
                     ).fetchone()
                     if p is not None:
-                        enlace = (
-                            f'<a class="receta" href="{html.escape(p["url_producto"] or "#")}" '
-                            f'target="_blank">{html.escape(p["nombre"][:60])}</a>'
-                        )
                         paquete = (
                             f' <span class="meta">({p["precio_eur"]:.2f} €/ud)</span>'
                             if p["precio_eur"] is not None else ""
                         )
-                        prod_html = enlace + paquete
+                        # Producto como BOTÓN (spec): hover verde suave, sin subrayado.
+                        prod_html = (
+                            f'<a class="prod-btn" href="{html.escape(p["url_producto"] or "#")}" '
+                            f'target="_blank">{html.escape(p["nombre"][:60])}{paquete}</a>'
+                        )
                         factor = _FACTOR_PRECIO.get(p["unidad_medida"])
                         if gramos is not None and factor and p["precio_por_unidad"] is not None:
                             coste_ing = gramos * factor * p["precio_por_unidad"]
                             total += coste_ing
                             precio_html = f'<span class="coste-val" data-base="{coste_ing}">{coste_ing:.2f}</span> €'
                 filas += (
-                    f"<tr><td>{html.escape(ing['texto_original'][:70])}</td><td>{cant_html}</td>"
-                    f"<td>{prod_html}</td><td>{precio_html}</td></tr>"
+                    f"<tr><td>{html.escape(ing['texto_original'][:70])}</td>"
+                    f'<td class="c">{cant_html}</td>'
+                    f"<td>{prod_html}</td><td class=\"c\">{precio_html}</td></tr>"
                 )
             raciones = cab["raciones"] or 1
-            fav = ' <span class="fav">★ favorita</span>' if cab["es_favorita"] else ""
-            fuente = (
-                f'<a class="receta" href="{html.escape(cab["url"])}" target="_blank">'
-                f'{html.escape(cab["fuente"] or "fuente")}</a>'
-                if cab["url"] and not cab["url"].startswith("manual://")
-                else html.escape(cab["fuente"] or "manual")
-            )
+            # Título = enlace a la fuente original (spec); SIN línea "fuente:".
+            if cab["url"] and not cab["url"].startswith("manual://"):
+                titulo_html = (
+                    f'<a class="titulo-receta" href="{html.escape(cab["url"])}" '
+                    f'target="_blank">{html.escape(cab["titulo"])}</a>'
+                )
+            else:
+                titulo_html = f'<span class="titulo-receta">{html.escape(cab["titulo"])}</span>'
             tiempo = (
-                f' · ⏱ {cab["tiempo_total_min"]} min' if cab["tiempo_total_min"] else ""
+                f'<span class="meta" style="white-space:nowrap">⏱ {cab["tiempo_total_min"]} '
+                "min</span>" if cab["tiempo_total_min"] else ""
             )
-            # Etiquetas deterministas (#46).
+            editar_btn = (
+                f'<a class="btn neu mini" href="/recetas/{html.escape(receta_id)}/editar">'
+                "Editar</a>" if cab["fuente"] == FUENTE_MANUAL else ""
+            )
+            # Etiquetas deterministas (#46). El chip ★ Favorita va PRIMERO (spec).
             ings_norm = {i["nombre_normalizado"] for i in ingredientes if i["nombre_normalizado"]}
             tags = generar_tags(
                 tiempo_total_min=cab["tiempo_total_min"], ingredientes_norm=ings_norm,
                 es_batchcooking=bool(cab["es_batchcooking"]), es_plato_unico=bool(cab["es_plato_unico"]),
             )
             utensilios = sorted(detectar_utensilios(cab["titulo"], cab["instrucciones"]))  # #47
-            chips_tags = "".join(
+            chips_tags = (
+                '<span class="chip favorita">★ Favorita</span>' if cab["es_favorita"] else ""
+            ) + "".join(
                 f'<span class="chip">{html.escape(t)}</span>' for t in tags + utensilios
             )
             # Imagen (#40) y pasos de elaboración (#39), cuando la fuente los trae.
@@ -453,69 +467,90 @@ def crear_app(config_path: str | Path = "config.yaml") -> FastAPI:
                 lis = "".join(f"<li>{html.escape(p)}</li>" for p in pasos)
                 media += (
                     '<div class="franja">Elaboración</div>'
-                    f'<ol style="padding-left:20px;line-height:1.6">{lis}</ol>'
+                    f'<ol style="padding-left:20px;line-height:1.7">{lis}</ol>'
                 )
             elaboracion = f'<div class="card">{media}</div>' if media else ""
-            # Recomendador por afinidad (#99/Lote 12): recetas parecidas por ingredientes,
-            # con las bien valoradas personalmente por delante.
+            # Recetas afines (spec): filas-botón a todo el ancho, sin subrayado,
+            # % de ingredientes en común a la derecha y hover muy sutil.
             afines = recetas_afines(conn, receta_id)
             afines_html = ""
             if afines:
                 filas_afines = "".join(
-                    f'<li><a class="receta" href="/receta/{html.escape(a["receta_id"])}">'
-                    f'{html.escape(a["titulo"])}</a> '
-                    f'<span class="meta">({a["similitud"] * 100:.0f}% ingredientes en común)</span></li>'
+                    f'<a class="afin-fila" href="/receta/{html.escape(a["receta_id"])}">'
+                    f"<span>{html.escape(a['titulo'])}</span>"
+                    f'<span class="meta">{a["similitud"] * 100:.0f}% en común</span></a>'
                     for a in afines
                 )
                 afines_html = (
                     '<div class="card"><div class="franja">Recetas afines</div>'
-                    f"<ul style='padding-left:20px'>{filas_afines}</ul></div>"
+                    f'<div class="filas-full">{filas_afines}</div></div>'
                 )
             # Escalado dinamico de raciones (#41): recalcula cantidades y coste sin
             # recargar la pagina (JS multiplica por el factor deseadas/base).
             aviso = f'<div class="card"><p class="ok">{html.escape(msg)}</p></div>' if msg else ""
+            svg_menos = (
+                '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+                'stroke-width="2.4" stroke-linecap="round"><line x1="4" y1="8" x2="12" y2="8"/>'
+                "</svg>"
+            )
+            svg_mas = (
+                '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" '
+                'stroke-width="2.4" stroke-linecap="round"><line x1="8" y1="4" x2="8" y2="12"/>'
+                '<line x1="4" y1="8" x2="12" y2="8"/></svg>'
+            )
             cuerpo = (
                 aviso
-                + f'<div class="card"><div class="big">{html.escape(cab["titulo"])}{fav}</div>'
-                f'<p class="meta">fuente: {fuente}{tiempo}</p>'
-                + (f'<p>{chips_tags}</p>' if chips_tags else "")
-                + f'<p><a class="receta" href="/valoraciones/{html.escape(receta_id)}">'
-                "⭐ Valorar esta receta</a></p>"
-                + '<p><label>Raciones: <input type="number" id="raciones-input" '
-                f'value="{raciones}" min="1" step="1" style="width:70px" '
-                'oninput="reescalarReceta()"></label></p>'
-                f'<table><tr><th>Ingrediente</th><th>Cantidad</th>'
-                f"<th>Producto Alcampo</th><th>Coste usado</th></tr>{filas}</table>"
-                f'<p class="franja">Coste de la receta (<span id="raciones-mostradas">{raciones}</span> '
-                f'raciones): <span id="coste-total">{total:.2f}</span> € '
-                f'<span class="meta">(<span id="coste-racion">{total / raciones:.2f}</span> €/ración)</span></p>'
-                f'<p class="meta">El "coste usado" es la parte proporcional del producto que '
-                f"consume la receta (no el precio del paquete entero).</p></div>"
+                + '<div class="card">'
+                '<div style="display:flex;justify-content:space-between;align-items:center;'
+                'gap:10px;flex-wrap:wrap">'
+                f'<span style="display:inline-flex;align-items:baseline;gap:10px">'
+                f"{titulo_html}{tiempo}</span>{editar_btn}</div>"
+                + (f'<p style="margin:8px 0 0">{chips_tags}</p>' if chips_tags else "")
+                # Fila "Valorar esta receta" a todo el ancho, con › y hover (spec).
+                + f'<a class="valorar-fila" href="/valoraciones/{html.escape(receta_id)}">'
+                '<span>Valorar esta receta</span><span class="flechita">›</span></a>'
+                # Selector de raciones −/+ (spec): recuadro suave, círculos con signo SVG.
+                + '<div style="margin:0 0 12px"><span class="rac-box">Raciones '
+                f'<button class="rac-btn rac-menos" type="button" aria-label="Menos raciones" '
+                f'onclick="cambiarRaciones(-1)">{svg_menos}</button>'
+                f'<b class="rac-num">{raciones}</b>'
+                f'<button class="rac-btn rac-mas" type="button" aria-label="Más raciones" '
+                f'onclick="cambiarRaciones(1)">{svg_mas}</button></span></div>'
+                + '<table class="ing-tabla"><tr><th>Ingrediente</th><th class="c">Cantidad</th>'
+                f"<th>Producto Alcampo</th><th class=\"c\">Coste usado</th></tr>{filas}</table>"
+                + '<hr class="sep-full">'
+                f'<p style="margin:0;font-weight:700;color:var(--verde-osc);font-size:14px">'
+                f'Coste de la receta (<span class="rac-num">{raciones}</span> raciones): '
+                f'<span id="coste-total">{total:.2f}</span> € '
+                f'<span class="meta" style="font-weight:400">'
+                f'(<span id="coste-racion">{total / raciones:.2f}</span> €/ración)</span></p>'
+                f'<p class="meta" style="margin:6px 0 0">El «coste usado» es la parte '
+                "proporcional del producto que consume la receta (no el precio del paquete "
+                "entero).</p></div>"
                 + elaboracion
                 + afines_html
                 + f"""<script>
-function reescalarReceta() {{
+let racionesActual = {raciones};
+function cambiarRaciones(d) {{
+  racionesActual = Math.max(1, racionesActual + d);
   const base = {raciones};
-  const deseadas = Math.max(1, parseFloat(document.getElementById('raciones-input').value) || base);
-  const factor = deseadas / base;
+  const factor = racionesActual / base;
   let totalCoste = 0;
   document.querySelectorAll('.cant-val').forEach(el => {{
-    const b = parseFloat(el.dataset.base);
-    el.textContent = (b * factor).toFixed(0);
+    el.textContent = (parseFloat(el.dataset.base) * factor).toFixed(0);
   }});
   document.querySelectorAll('.coste-val').forEach(el => {{
-    const b = parseFloat(el.dataset.base);
-    const v = b * factor;
+    const v = parseFloat(el.dataset.base) * factor;
     totalCoste += v;
     el.textContent = v.toFixed(2);
   }});
+  document.querySelectorAll('.rac-num').forEach(el => {{ el.textContent = racionesActual; }});
   document.getElementById('coste-total').textContent = totalCoste.toFixed(2);
-  document.getElementById('coste-racion').textContent = (totalCoste / deseadas).toFixed(2);
-  document.getElementById('raciones-mostradas').textContent = deseadas;
+  document.getElementById('coste-racion').textContent = (totalCoste / racionesActual).toFixed(2);
 }}
 </script>"""
             )
-            return _pagina(cab["titulo"], cuerpo)
+            return _pagina(cab["titulo"], cuerpo, activa="recetas")
         finally:
             conn.close()
 

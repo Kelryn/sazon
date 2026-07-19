@@ -180,6 +180,43 @@ table.cat-tabla th { background: var(--thead-bg); color: var(--thead-texto);
 table.cat-tabla td { border-bottom: none; }
 table.cat-tabla tr:nth-child(odd) td { background: var(--fila-alt); }
 .apto-si { color: #4d7a3a; font-weight: 700; }
+/* Detalle de receta (spec Lote 11). */
+.titulo-receta { font-size: 22px; font-weight: 700; color: var(--text); text-decoration: none; }
+a.titulo-receta:hover { color: var(--verde); }
+.chip.favorita { background: #faf1d8; color: #9d7a1b; }
+:root[data-theme="dark"] .chip.favorita { background: #3a331b; color: #d9b96a; }
+a.valorar-fila { display: flex; justify-content: space-between; align-items: center;
+  margin: 12px -18px; padding: 10px 18px; border-top: 1px solid var(--neutro-bg);
+  border-bottom: 1px solid var(--neutro-bg); color: var(--verde-osc); font-size: 13px;
+  font-weight: 600; text-decoration: none; transition: background-color .15s; }
+a.valorar-fila:hover { background: var(--plegar-h); }
+a.valorar-fila .flechita { color: #a8a08a; }
+.rac-box { display: inline-flex; align-items: center; gap: 10px; background: var(--tinte-dia);
+  border-radius: 8px; padding: 6px 12px; font-size: 13px; color: var(--text); }
+.rac-btn { width: 17px; height: 17px; border-radius: 50%; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none;
+  transition: filter .15s; }
+.rac-btn svg { width: 9px; height: 9px; display: block; }
+.rac-btn:hover { filter: brightness(.94); }
+.rac-menos { background: #f6e7e3; color: #b5482f; }
+.rac-mas { background: #e9f0e0; color: #4d7a3a; }
+table.ing-tabla td { border-bottom: none; vertical-align: middle; }
+table.ing-tabla tr:nth-child(odd) td { background: var(--fila-nutri); }
+table.ing-tabla .c, table.ing-tabla th.c { text-align: center; }
+a.prod-btn { display: inline-block; color: var(--verde-osc); border-radius: 6px;
+  padding: 4px 8px; margin: -4px -8px; text-decoration: none; transition: background-color .15s; }
+a.prod-btn:hover { background: var(--hover-fila); }
+.celda-vacia { color: #c9c4ae; display: block; text-align: center; }
+.sep-full { border: 0; border-top: 1px solid var(--border); margin: 12px -18px; }
+a.afin-fila { display: flex; justify-content: space-between; align-items: center;
+  margin: 0 -18px; padding: 9px 18px; text-decoration: none; color: var(--verde-osc);
+  font-size: 13px; transition: background-color .15s; }
+a.afin-fila:hover { background: #faf7f0; }
+:root[data-theme="dark"] a.afin-fila:hover { background: var(--hover-fila); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) a.afin-fila:hover { background: var(--hover-fila); }
+  :root:not([data-theme="light"]) .chip.favorita { background: #3a331b; color: #d9b96a; }
+}
 /* Control segmentado (p. ej. tema Claro/Oscuro/Sistema): activo verde, resto apagado. */
 .seg { display: inline-flex; gap: 4px; background: var(--neutro-bg); padding: 4px; border-radius: 9px; }
 .seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px;
